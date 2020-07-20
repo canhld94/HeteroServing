@@ -24,6 +24,7 @@
 #include <string>
 #include <thread>
 #include <chrono>
+#include <ultis/ultis.h>
 
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
@@ -68,43 +69,42 @@ mime_type(beast::string_view path)
     return "application/text";
 }
 
-// Append an HTTP rel-path to a local filesystem path.
-// The returned path is normalized for the platform.
+/* 
+    This function resolve the request target to route it
+    to proper resource. 
+ */
+
 std::string
-path_cat(
-    beast::string_view base,
-    beast::string_view path)
-{
-	if (base.empty())
-		return std::string(path);
-    std::string result(base);
-#ifdef BOOST_MSVC
-    char constexpr path_separator = '\\';
-    if(result.back() == path_separator)
-        result.resize(result.size() - 1);
-    result.append(path.data(), path.size());
-    for(auto& c : result)
-        if(c == '/')
-            c = path_separator;
-#else
-    char constexpr path_separator = '/';
-    if(result.back() == path_separator)
-        result.resize(result.size() - 1);
-    result.append(path.data(), path.size());
-#endif
-    return result;
+request_resolve (beast::string_view const &target ) {
+    // Now do it as simple as possible
+    // Assume the request to the server is always in form `/{resource}`
+    if (target.empty() 
+    || target[0] != '/'
+    || target.find("..") != beast::string_view::npos)
+    return "";
+    std::string ret;
+    if (target.size() == 1) { // send header
+        ret = "/";
+    }
+    else {
+        // string_view has no null-terminated, therefore it cannot implicitly 
+        // convert from string_view to string
+        ret = static_cast<std::string>(target.substr(1,target.size()));
+    }
+    return ret;
 }
 
-// This function produces an HTTP response for the given
-// request. The type of the response object depends on the
-// contents of the request, so the interface requires the
-// caller to pass a generic lambda for receiving the response.
+/* 
+    This function produces an HTTP response for the given
+    request. The type of the response object depends on the
+    contents of the request, so the interface requires the
+    caller to pass a generic lambda for receiving the response. 
+*/
 template<
     class Body, class Allocator,
     class Send>
 void
 handle_request(
-    beast::string_view doc_root,
     http::request<Body, http::basic_fields<Allocator>>&& req,
     Send&& send)
 {
@@ -158,24 +158,21 @@ handle_request(
         return send(bad_request("Unknown HTTP-method"));
 
     // Request path must be absolute and not contain "..".
-    if( req.target().empty() ||
-        req.target()[0] != '/' ||
-        req.target().find("..") != beast::string_view::npos)
+    std::string target = request_resolve(req.target());
+    if (target.size() == 0) {
         return send(bad_request("Illegal request-target"));
+    }
+    std::cout << "Recieve request to resource " << target << std::endl;
 
-    // Build the path to the requested file
-    std::string path = path_cat(doc_root, req.target());
-    if(req.target().back() == '/')
-        path.append("index.html");
 
     // Attempt to open the file
     beast::error_code ec;
     http::file_body::value_type body;
-    body.open(path.c_str(), beast::file_mode::scan, ec);
+    body.open(target.c_str(), beast::file_mode::scan, ec);
 
     // Handle the case where the file doesn't exist
     if(ec == beast::errc::no_such_file_or_directory)
-        return send(not_found(req.target()));
+        return send(not_found(target));
 
     // Handle an unknown error
     if(ec)
@@ -189,7 +186,7 @@ handle_request(
     {
         http::response<http::empty_body> res{http::status::ok, req.version()};
         res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, mime_type(path));
+        res.set(http::field::content_type, mime_type(target));
         res.content_length(size);
         res.keep_alive(req.keep_alive());
         return send(std::move(res));
@@ -201,7 +198,7 @@ handle_request(
             std::make_tuple(std::move(body)),
             std::make_tuple(http::status::ok, req.version())};
         res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, mime_type(path));
+        res.set(http::field::content_type, mime_type(target));
         res.content_length(size);
         res.keep_alive(req.keep_alive());
         return send(std::move(res));
@@ -210,9 +207,9 @@ handle_request(
         // Respond to POST request
         auto &post_body = req.body();
         // print everything we can about the request
+        std::cout << type_name<decltype(post_body)>() << std::endl;
         auto &post_header = req.base();
         std::cout << post_header;
-
         http::response<http::string_body> res{
             http::status::ok, 
             req.version()
@@ -273,8 +270,7 @@ struct send_lambda
 // Handles an HTTP server connection
 void
 do_session(
-    tcp::socket& socket,
-    std::shared_ptr<std::string const> const& doc_root)
+    tcp::socket& socket)
 {
     auto start = std::chrono::system_clock::now();
     bool close = false;
@@ -297,7 +293,7 @@ do_session(
             return fail(ec, "read");
 
         // Send the response
-        handle_request(*doc_root, std::move(req), lambda);
+        handle_request(std::move(req), lambda);
         if(ec)
             return fail(ec, "write");
         if(close)
@@ -323,17 +319,16 @@ int main(int argc, char* argv[])
     try
     {
         // Check command line arguments.
-        if (argc != 4)
+        if (argc != 3)
         {
             std::cerr <<
-                "Usage: http-server-sync <address> <port> <doc_root>\n" <<
+                "Usage: http-server <address> <port>\n" <<
                 "Example:\n" <<
                 "    http-server-sync 0.0.0.0 8080 .\n";
             return EXIT_FAILURE;
         }
         auto const address = net::ip::make_address(argv[1]);
         auto const port = static_cast<unsigned short>(std::atoi(argv[2]));
-        auto const doc_root = std::make_shared<std::string>(argv[3]);
 
         // The io_context is required for all I/O
         net::io_context ioc{1};
@@ -351,8 +346,7 @@ int main(int argc, char* argv[])
             // Launch the session, transferring ownership of the socket
             std::thread{std::bind(
                 &do_session,
-                std::move(socket),
-                doc_root)}.detach();
+                std::move(socket))}.detach();
             // do_session(socket,doc_root);
         }
     }
