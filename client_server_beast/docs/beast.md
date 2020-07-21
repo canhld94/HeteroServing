@@ -47,9 +47,51 @@ Fields::header<isRequest>::message<isRequest,Body>::request<isRequest=true>
 
 ### Body
 
-`Body` is an _concept_ in beast. It defines the `message::body` member, and also include algorithm for transfering data in and out. The algorithms are used during parsing and serialization
+`Body` is an _concept_ in beast. It defines the `message::body` member, and also include algorithm for transfering data in and out. The algorithms are used during parsing and serialization. Note that `body` is just a _concept_, not a class. From the `body` concept, beast implement specific classes to handle with different type of body: _string\_body_, _file\_body_, _dynamic\_body_  
+Example of `body`  
 
-Note that `body` is just a _concept_, not a class. From the `body` concept, beast implement specific classes to handle with different type of body: _string\_body_, _file\_body_, _dynamic\_body_
+```C++
+struct canhBody { // actually not my body
+    // the type of the container that will carry the body
+    struct value_type;
+    // the algorihtm for reading during parsing
+    class reader;
+    // the algorithm for writing during serialization
+    class writer;
+    // the body's payload size
+    static  
+    std::uint64_t size(value_type const& body);
+}
+```
 
+That said, whatever class you write that support the class member `value_type`, `reader`, `writer`, and method `size()`, is sufficient to use as `Body` in Beast. Neverthless, these member classes should fulfill some requirements, but we will not discuss it here in detail.  
+Important Body that we will use frequently in this project  
+[**string_body**](string_body)
+
+```C++
+template <
+    class CharT,
+    class Traits = std::char_traits<CharT>,
+    class Allocator = std::allocator<CharT>>
+    class basic_string_body {
+        using value_type = std::basic_string<charT, Traits, Allocator>;
+        class reader {
+            ...
+        }
+        class writer {
+            ...
+        }
+        static  
+        std::uint64_t size(value_type const& body) {
+            ...
+        }
+    }
+using string_body = basic-string_body<std::char>
+```
+
+As its name, `string_body` is a string. It use `std::string` as the container, and use _pre\_defined_ implementation of `read` and `write` in the STL as `reader` and `writer`. Cool, right? Nooooo. `string_body` is _just_ a string, but most of RESTful API should return **JSON**. We need a method to write and parse the JSON object ourself :(.  
+[**file_body**](file_body)
+
+[**dynamic_body**](dynamic_body)
 
 ## Protocol

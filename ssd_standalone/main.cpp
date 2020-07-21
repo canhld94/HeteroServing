@@ -96,7 +96,7 @@ static const std::string base64_chars =
              "0123456789+/";
 
 
-constexpr bool is_base64(unsigned char c) {
+bool is_base64(unsigned char c) {
   return (isalnum(c) || (c == '+') || (c == '/'));
 }
 

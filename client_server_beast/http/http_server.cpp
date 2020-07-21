@@ -23,6 +23,8 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <set>
+#include <sstream>
 #include <chrono>
 #include <ultis/ultis.h>
 
@@ -71,13 +73,20 @@ mime_type(beast::string_view path)
 
 /* 
     This function resolve the request target to route it
-    to proper resource. 
+    to proper resource. Raise ec::no_such_file if the 
+    resource doesn't exist
  */
 
 std::string
-request_resolve (beast::string_view const &target ) {
+request_resolve (beast::string_view const &target, beast::error_code &ec) {
     // Now do it as simple as possible
     // Assume the request to the server is always in form `/{resource}`
+    // current supported resources
+    static const std::set<std::string> resources = {
+        "/",
+        "metadata",
+        "inference"
+    };
     if (target.empty() 
     || target[0] != '/'
     || target.find("..") != beast::string_view::npos)
@@ -91,7 +100,75 @@ request_resolve (beast::string_view const &target ) {
         // convert from string_view to string
         ret = static_cast<std::string>(target.substr(1,target.size()));
     }
+    if (resources.find(ret) == resources.end()) {
+        // raise no_such_file error
+        ec = beast::errc::make_error_code(beast::errc::no_such_file_or_directory);
+    }
     return ret;
+}
+
+/* 
+    This function handles the request at GET /
+ */
+
+std::string
+greeting () {
+    std::ostringstream ss;
+    ss.str("");
+    ss << std::fixed << "{\n"
+       << "\"from\": \"canhld@kaist.ac.kr\",\n" 
+       << "\"message\": \"welcome to SSD inference server version 1\"\n"
+       << "}";
+    std::cout << ss.str() << std::endl;
+    return ss.str();
+}
+
+/* 
+    This function handles the metadata request at GET /metadata 
+    TODO: Implement the function with proper resource
+ */
+
+std::string 
+handle_metadata_request () {
+    std::ostringstream ss;
+    ss.str("");
+    ss << std::fixed << "{\n"
+       << "\"from\": \"canhld@kaist.ac.kr\",\n" 
+       << "\"message\": \"this is metadata request\"\n"
+       << "}";
+    std::cout << ss.str() << std::endl;
+    return ss.str();
+}
+
+/*
+    This funtion handles the inference request at POST /inference
+    All request return string body, so its return type is std::string
+    should we format it with JSON?
+*/
+
+template <class Body, class Allocator>
+std::string 
+handle_inference_request (http::request<Body,http::basic_fields<Allocator>> & req) {
+    // we know this is the post method
+    // now, first extact the content-type
+
+    // boost::beast::http::header<true, boost::beast::http::basic_fields<std::allocator<char> > >&
+    auto &header = req.base();
+    auto &body = req.body();
+    std::cout << type_name<decltype(header)>() << std::endl;
+    std::cout << type_name<decltype(body)>() << std::endl;
+    std::cout << header["accept"] << std::endl;
+    std::cout << header["content-type"] << std::endl;
+    // image content type is image/jpeg, how to pass to our container?
+    std::ostringstream ss;
+    ss.str("");
+    ss << std::fixed << "{\n"
+       << "\"from\": \"canhld@kaist.ac.kr\",\n" 
+       << "\"message\": \"this is inference request\"\n"
+       << "}";
+    std::cout << ss.str() << std::endl;
+    return ss.str();
+
 }
 
 /* 
@@ -148,76 +225,80 @@ handle_request(
     };
 
     // Make sure we can handle the method
-
-    // Let try to add an post method here
-    // The post method recieve a string with field name, and return the string "Halu $name"
-
     if( req.method() != http::verb::get &&
         req.method() != http::verb::head &&
         req.method() != http::verb::post)
         return send(bad_request("Unknown HTTP-method"));
 
     // Request path must be absolute and not contain "..".
-    std::string target = request_resolve(req.target());
+    beast::error_code ec;
+    std::string target = request_resolve(req.target(),ec);
     if (target.size() == 0) {
         return send(bad_request("Illegal request-target"));
     }
     std::cout << "Recieve request to resource " << target << std::endl;
 
-
-    // Attempt to open the file
-    beast::error_code ec;
-    http::file_body::value_type body;
-    body.open(target.c_str(), beast::file_mode::scan, ec);
-
-    // Handle the case where the file doesn't exist
+    // Handle the case where the resource doesn't exist
     if(ec == beast::errc::no_such_file_or_directory)
-        return send(not_found(target));
+        return send(not_found(req.target()));
+
+    // Creating our response with string_body
+    http::string_body::value_type body;
 
     // Handle an unknown error
     if(ec)
         return send(server_error(ec.message()));
 
-    // Cache the size since we need it after the move
-    auto const size = body.size();
-
-    // Respond to HEAD request
+    // Respond to HEAD request, alway just send the basic information of the server
     if(req.method() == http::verb::head)
     {
         http::response<http::empty_body> res{http::status::ok, req.version()};
         res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
         res.set(http::field::content_type, mime_type(target));
-        res.content_length(size);
+        res.content_length(0);
         res.keep_alive(req.keep_alive());
         return send(std::move(res));
     }
     else if (req.method() == http::verb::get) {
         // Respond to GET request
-        http::response<http::file_body> res{
+        if (target == "/") {
+            body = greeting();
+        }
+        else if (target == "metadata") {
+            body = handle_metadata_request();
+        }
+        else {
+            return send(bad_request("Illegal HTTP method"));
+        }
+        // Cache the size since we need it after the move
+        auto const size = body.size();
+        http::response<http::string_body> res{
             std::piecewise_construct,
             std::make_tuple(std::move(body)),
             std::make_tuple(http::status::ok, req.version())};
         res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, mime_type(target));
+        res.set(http::field::content_type, "application/json");
         res.content_length(size);
         res.keep_alive(req.keep_alive());
         return send(std::move(res));
     }
     else { 
         // Respond to POST request
-        auto &post_body = req.body();
-        // print everything we can about the request
-        std::cout << type_name<decltype(post_body)>() << std::endl;
-        auto &post_header = req.base();
-        std::cout << post_header;
+        if (target == "inference") {
+            body = handle_inference_request(req);
+        }
+        else {
+            return send(bad_request("Illegal HTTP method"));
+        }
+        // Cache the size since we need it after the move
+        auto const size = body.size();
         http::response<http::string_body> res{
-            http::status::ok, 
-            req.version()
-            };
+            std::piecewise_construct,
+            std::make_tuple(std::move(body)),
+            std::make_tuple(http::status::ok, req.version())};
         res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, post_header["content-type"]);
-        res.body() = std::move(post_body);
-        res.content_length(post_body.size());
+        res.set(http::field::content_type, "application/json");
+        res.content_length(size);
         res.keep_alive(req.keep_alive());
         return send(std::move(res));
     }
@@ -324,7 +405,7 @@ int main(int argc, char* argv[])
             std::cerr <<
                 "Usage: http-server <address> <port>\n" <<
                 "Example:\n" <<
-                "    http-server-sync 0.0.0.0 8080 .\n";
+                "    http-server 0.0.0.0 8080 .\n";
             return EXIT_FAILURE;
         }
         auto const address = net::ip::make_address(argv[1]);
