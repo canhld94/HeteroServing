@@ -1,7 +1,7 @@
 # Read me for an easy life
 
 1. What is this project?  
-This project build the demo for MEC project in 2020
+This project build the demo for MEC project in 2020. The main objective is building an FPGA inference server running deep learning algorithms on Intel FPGA and expose RESTful APIs to users.
 
 2. Important notes
 Language: C++  
@@ -37,6 +37,14 @@ demo_apps/
 ```
 
 What have been done and what to learn up to
+
+## ---- 2020 / 07 / 23 ----
+
+- handle image data from client using `http::string_body` --> `char` array in JPEG form
+- create the inference api which response the desired format
+- handle JSON with `boost::property_tree`
+- create the struture for `ssdFPGA.h`
+- now ready to integrate the FPGA inference engine
 
 ## ---- 2020 / 07 / 22 ----
 

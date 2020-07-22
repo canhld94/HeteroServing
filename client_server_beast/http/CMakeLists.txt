@@ -7,7 +7,7 @@
 
 link_directories(${LIB_FOLDER})
 
-add_executable(http_server http_server.cpp)
+add_executable(http_server http_server.cpp ssdFPGA.h)
 
 add_executable(http_client http_client.cpp)
 
@@ -16,12 +16,23 @@ set_target_properties(http_client PROPERTIES "CMAKE_CXX_FLAGS" "${CMAKE_CXX_FLAG
 
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
 SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")
+add_dependencies(http_server format_reader ie_cpu_extension)
 
-target_include_directories(http_server PRIVATE ${Boost_INCLUDE_DIRS})
+target_include_directories(http_server PRIVATE 
+                            ${InferenceEngine_INCLUDE_DIRS} 
+                            ${Boost_INCLUDE_DIRS}
+                            ${OpenCV_INCLUDE_DIRS}
+                            ${GFLAGS_INCLUDE_DIRS})
 target_include_directories(http_client PRIVATE ${Boost_INCLUDE_DIRS})
 
-target_link_libraries(http_server ${Boost_LIBRARIES})
-target_link_libraries(http_client ${Boost_LIBRARIES})
+target_link_libraries(http_server 
+                        IE::ie_cpu_extension
+                        ${Boost_LIBRARIES} 
+                        ${OpenCV_LIBRARIES}
+                        ${InferenceEngine_LIBRARIES}
+                        ${GFLAGS_LIBRARIES})
+target_link_libraries(http_client 
+                        ${Boost_LIBRARIES})
 
 install(TARGETS http_client http_server
         RUNTIME DESTINATION bin

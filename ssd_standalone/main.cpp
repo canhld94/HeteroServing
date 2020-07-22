@@ -44,7 +44,7 @@
 #include <samples/ocv_common.hpp>
 #include <samples/slog.hpp>
 
-#include "object_detection_demo_ssd_async.hpp"
+#include "ssd_standalone.hpp"
 #include <ext_list.hpp>
 
 typedef struct color {

@@ -6,32 +6,45 @@
 
 ### Response format
 
+Example response of `POST /inference`
+
 ```json
 {
-  "status": "ok",
-  "predictions": [
-      {
-          "label_id": "1",
-          "label": "person",
-          "probability": 0.944034993648529,
-          "detection_box": [
-              0.1242099404335022,
-              0.12507188320159912,
-              0.8423267006874084,
-              0.5974075794219971
-          ]
-      },
-      {
-          "label_id": "18",
-          "label": "dog",
-          "probability": 0.8645511865615845,
-          "detection_box": [
-              0.10447660088539124,
-              0.17799153923988342,
-              0.8422801494598389,
-              0.732001781463623
-          ]
-      }
-  ]
+    "status": "ok",
+    "predictions": [
+        {
+            "label_id": "78",
+            "label": "lalaland_0",
+            "confidences": "1.1627906976744187",
+            "detection_box": [
+                "777",
+                "915",
+                "793",
+                "335"
+            ]
+        },
+        {
+            "label_id": "38",
+            "label": "lalaland_1",
+            "confidences": "1.0869565217391304",
+            "detection_box": [
+                "649",
+                "421",
+                "362",
+                "27"
+            ]
+        },
+        {
+            "label_id": "13",
+            "label": "lalaland_2",
+            "confidences": "1.6949152542372881",
+            "detection_box": [
+                "763",
+                "926",
+                "540",
+                "426"
+            ]
+        }
+    ]
 }
 ```

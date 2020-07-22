@@ -18,6 +18,7 @@
 #include <boost/beast/version.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/config.hpp>
+#include <boost/property_tree/json_parser.hpp>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
@@ -25,17 +26,37 @@
 #include <thread>
 #include <set>
 #include <sstream>
+#include <fstream>
 #include <chrono>
+
+// Custom
 #include <ultis/ultis.h>
+#include "ssdFPGA.h"
+
+// OpenCV
 
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
+namespace bpt = boost::property_tree;   // from <boots/property_tree>
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
+typedef bpt::ptree JSON;                // just hiding the ugly name
+
+// basic io std that we don't want to put std every time
+using std::cout;
+using std::endl;
+using std::ofstream;
+using ncl::bbox;
+
+// global inference engine that run on our server
+ncl::ssdFPGA ie;
 
 //------------------------------------------------------------------------------
 
-// Return a reasonable mime type based on the extension of a file.
+/* 
+    Return a reasonable mime type based on the extension of a file.
+ */
+
 beast::string_view
 mime_type(beast::string_view path)
 {
@@ -69,6 +90,22 @@ mime_type(beast::string_view path)
     if(iequals(ext, ".svg"))  return "image/svg+xml";
     if(iequals(ext, ".svgz")) return "image/svg+xml";
     return "application/text";
+}
+
+/* 
+    This funtion send a error to the client
+    Depend on the error code, server should send different message 
+*/
+template <class Body, class Alocator>
+http::response<http::string_body> 
+error_message(http::request<Body, http::basic_fields<Alocator>> &req, http::status status, beast::string_view why) {
+    http::response<http::string_body> res{status, req.version()};
+    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+    res.set(http::field::content_type, "text/html");
+    res.keep_alive(req.keep_alive());
+    res.body() = std::string(why);
+    res.prepare_payload();
+    return res;
 }
 
 /* 
@@ -116,8 +153,10 @@ greeting () {
     std::ostringstream ss;
     ss.str("");
     ss << std::fixed << "{\n"
+       << "\"type\": \"greeting\",\n" 
        << "\"from\": \"canhld@kaist.ac.kr\",\n" 
-       << "\"message\": \"welcome to SSD inference server version 1\"\n"
+       << "\"message\": \"welcome to SSD inference server version 1\",\n"
+       << "\"what next\": \"GET /v1/ for supported API\"\n"
        << "}";
     std::cout << ss.str() << std::endl;
     return ss.str();
@@ -144,6 +183,7 @@ handle_metadata_request () {
     This funtion handles the inference request at POST /inference
     All request return string body, so its return type is std::string
     should we format it with JSON?
+    TODO: Implement the handler to work with image data
 */
 
 template <class Body, class Allocator>
@@ -154,21 +194,57 @@ handle_inference_request (http::request<Body,http::basic_fields<Allocator>> & re
 
     // boost::beast::http::header<true, boost::beast::http::basic_fields<std::allocator<char> > >&
     auto &header = req.base();
+    // string body --> basic_string
     auto &body = req.body();
-    std::cout << type_name<decltype(header)>() << std::endl;
-    std::cout << type_name<decltype(body)>() << std::endl;
-    std::cout << header["accept"] << std::endl;
     std::cout << header["content-type"] << std::endl;
+    beast::string_view const &content_type = header["content-type"];
+    if (content_type.find("image/") == std::string::npos) {
+        return "{\n\"message\":\"not an image\"\n}";
+    }
     // image content type is image/jpeg, how to pass to our container?
-    std::ostringstream ss;
-    ss.str("");
-    ss << std::fixed << "{\n"
-       << "\"from\": \"canhld@kaist.ac.kr\",\n" 
-       << "\"message\": \"this is inference request\"\n"
-       << "}";
-    std::cout << ss.str() << std::endl;
-    return ss.str();
+    // assume we receive an image, first try to save it first
+    beast::string_view ext = content_type.substr(6,content_type.size());
+    cout << "reciveve image with type " << ext << std::endl;
+    std::string filename = "test." + std::string(ext);
+    // ofstream stream;
+    // stream.open(filename.c_str());
+    // stream << body;
+    // stream.close();
+    // cout << "Save file successful" << endl;
 
+    auto data = body.data();    
+    std::vector<bbox> prediction = ie.run(data);
+    int n = prediction.size();
+    // create property tree and write to json
+    JSON res;                   // our response
+    JSON bboxes;                // predicion
+    if (n > 0) {
+        res.put<std::string>("status","ok");
+    }
+    else {
+        res.put<std::string>("status","not ok");
+        res.put<std::string>("why","empty detection box");
+    }
+    for (int i = 0; i < n; ++i) {
+        // parse prediction[i] to p[i]
+        bbox &pred = prediction[i];
+        JSON p;
+        p.put<int>("label_id",pred.label_id);
+        p.put<std::string>("label",pred.label);
+        p.put<double>("confidences",pred.prop);
+        JSON tmp;
+        for (int i = 0; i < 4; ++i) {
+            JSON v;
+            v.put<int>("",pred.c[i]);
+            tmp.push_back({"",v});
+        }
+        p.put_child("detection_box",tmp);
+        bboxes.push_back({"",p});
+    }
+    res.put_child("predictions",bboxes);
+    std::ostringstream ss;
+    bpt::write_json(ss,res);
+    return ss.str();
 }
 
 /* 
@@ -185,69 +261,31 @@ handle_request(
     http::request<Body, http::basic_fields<Allocator>>&& req,
     Send&& send)
 {
-    // Returns a bad request response
-    auto const bad_request =
-    [&req](beast::string_view why)
-    {
-        http::response<http::string_body> res{http::status::bad_request, req.version()};
-        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, "text/html");
-        res.keep_alive(req.keep_alive());
-        res.body() = std::string(why);
-        res.prepare_payload();
-        return res;
-    };
-
-    // Returns a not found response
-    auto const not_found =
-    [&req](beast::string_view target)
-    {
-        http::response<http::string_body> res{http::status::not_found, req.version()};
-        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, "text/html");
-        res.keep_alive(req.keep_alive());
-        res.body() = "The resource '" + std::string(target) + "' was not found.";
-        res.prepare_payload();
-        return res;
-    };
-
-    // Returns a server error response
-    auto const server_error =
-    [&req](beast::string_view what)
-    {
-        http::response<http::string_body> res{http::status::internal_server_error, req.version()};
-        res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-        res.set(http::field::content_type, "text/html");
-        res.keep_alive(req.keep_alive());
-        res.body() = "An error occurred: '" + std::string(what) + "'";
-        res.prepare_payload();
-        return res;
-    };
 
     // Make sure we can handle the method
     if( req.method() != http::verb::get &&
         req.method() != http::verb::head &&
         req.method() != http::verb::post)
-        return send(bad_request("Unknown HTTP-method"));
+        return send(error_message(req,http::status::bad_request,"Unknown HTTP-method"));
 
     // Request path must be absolute and not contain "..".
     beast::error_code ec;
     std::string target = request_resolve(req.target(),ec);
     if (target.size() == 0) {
-        return send(bad_request("Illegal request-target"));
+        return send(error_message(req,http::status::bad_request,"Illegal request-target"));
     }
     std::cout << "Recieve request to resource " << target << std::endl;
 
     // Handle the case where the resource doesn't exist
     if(ec == beast::errc::no_such_file_or_directory)
-        return send(not_found(req.target()));
+        return send(error_message(req,http::status::not_found,"Not found"));
 
     // Creating our response with string_body
     http::string_body::value_type body;
 
     // Handle an unknown error
     if(ec)
-        return send(server_error(ec.message()));
+        return send(error_message(req,http::status::unknown,ec.message()));
 
     // Respond to HEAD request, alway just send the basic information of the server
     if(req.method() == http::verb::head)
@@ -268,7 +306,7 @@ handle_request(
             body = handle_metadata_request();
         }
         else {
-            return send(bad_request("Illegal HTTP method"));
+            return send(error_message(req,http::status::bad_request,"Illegal HTTP method"));
         }
         // Cache the size since we need it after the move
         auto const size = body.size();
@@ -288,7 +326,7 @@ handle_request(
             body = handle_inference_request(req);
         }
         else {
-            return send(bad_request("Illegal HTTP method"));
+            return send(error_message(req,http::status::bad_request,"Illegal HTTP method"));
         }
         // Cache the size since we need it after the move
         auto const size = body.size();
