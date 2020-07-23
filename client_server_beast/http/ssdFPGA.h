@@ -24,6 +24,7 @@
 #include <string>
 #include <algorithm>
 #include <iterator>
+#include <mutex>
 
 #include <memory>
 #include <thread>
@@ -59,6 +60,10 @@ using std::endl;
 
 namespace common {
     /*
+    OpenVino Plugin class, hold all variable of the plugin
+    */
+
+    /*
     Light weight CNN class that hold all metadata we need
     This will be fill during construction of ssdFPGA;
     */
@@ -81,7 +86,7 @@ namespace common {
     public:
         int label_id;       // label id
         string label;       // class name
-        double prop;        // confidence score
+        float prop;        // confidence score
         int c[4];           // coordinates of bounding box
     };
 } // namespace commom
@@ -89,11 +94,102 @@ namespace common {
 
 namespace helper {
     using namespace common;
+    using namespace InferenceEngine; // namespace inference engine
+
+/*  
+    This function initilize the environment for our application
+    _device must be pass when construct
+*/
+    void init_plugin (string& device, InferencePlugin& plugin) {
+        cout << "Inference Engine version: " << GetInferenceEngineVersion() << endl;
+        // Loading Plugin
+        plugin = PluginDispatcher().getPluginByDevice(device);
+        // Adding CPU extension
+        if (device.find("CPU") != string::npos) { // has CPU, load extension
+            plugin.AddExtension(std::make_shared<Extensions::Cpu::CpuExtensions>());
+        }
+        return;
+    }
+
+    void load_network ( string& xml, 
+                        string& l,
+                        vector<string>& labels,
+                        CNNNetwork& network ) { // get the network
+        // Read the network
+        CNNNetReader netReader;
+        netReader.ReadNetwork(xml);
+        // Loading weight
+        string bin = xml;
+        for (int i = 0; i < 3; ++i) bin.pop_back();
+        bin += "bin";
+        netReader.ReadWeights(bin);
+        network = netReader.getNetwork();
+        // load the labels
+        std::ifstream inputFile(l);
+        std::copy(std::istream_iterator<std::string>(inputFile),
+                  std::istream_iterator<std::string>(),
+                  std::back_inserter(labels));
+        return;
+    }
+
+
+    void init_IO(CNNNetwork &network,
+                InputsDataMap &inputInfo,
+                OutputsDataMap &outputInfo) {
+
+        // Input Blob
+
+        inputInfo = InputsDataMap(network.getInputsInfo());
+        if (inputInfo.size() != 1) {
+            throw std::logic_error("This demo accepts networks having only one input");
+        }
+        InputInfo::Ptr& input = inputInfo.begin()->second;
+        auto inputName = inputInfo.begin()->first;
+        input->setPrecision(Precision::U8);
+        // input->getPreProcess().setResizeAlgorithm(ResizeAlgorithm::RESIZE_BILINEAR);
+        input->getInputData()->setLayout(Layout::NHWC);
+
+        // Output Blob
+
+        outputInfo = OutputsDataMap(network.getOutputsInfo());
+        if (outputInfo.size() != 1) {
+            throw std::logic_error("This demo accepts networks having only one output");
+        }
+        DataPtr& output = outputInfo.begin()->second;
+        auto outputName = outputInfo.begin()->first;
+        const SizeVector outputDims = output->getTensorDesc().getDims();
+        // const int maxProposalCount = outputDims[2];
+        const int objectSize = outputDims[3];
+        if (objectSize != 7) {
+            throw std::logic_error("Output should have 7 as a last dimension");
+        }
+        if (outputDims.size() != 4) {
+            throw std::logic_error("Incorrect output dimensions for SSD");
+        }
+        output->setPrecision(Precision::FP32);
+        output->setLayout(Layout::NCHW);
+    }
+
+    void load_plugin(InferencePlugin& plugin,
+                     CNNNetwork& network,
+                     ExecutableNetwork &exe_network) {
+        
+        exe_network = plugin.LoadNetwork(network, {});
+
+    }
+
+    void frameToBlob(const cv::Mat& frame,
+                 InferRequest::Ptr& inferRequest,
+                 const std::string& inputName) {
+                     
+        Blob::Ptr frameBlob = inferRequest->GetBlob(inputName);
+        matU8ToBlob<uint8_t>(frame, frameBlob);
+    }
 
     /*
         !Testing: return a random bbox vector
     */
-    vector<bbox> runtest(const char *data) {
+    vector<bbox> run_test(const char *data) {
         int n = 3;
         vector<bbox> ret(n);
         for (int i = 0; i < n; ++i) {
@@ -112,35 +208,53 @@ namespace helper {
 namespace ncl {
     using namespace helper;
     using namespace common;
+    using namespace InferenceEngine;
 
     /*
         SSD class that implement everything we need
     */
 
     class ssdFPGA {
-    private:
-        string _device;    // running device
-        string _xml;       // path to OpenVino xml file
-        lwCNN metadata;
+    private:                                       // path to labels file
+        vector<string> _labels;
+        InferenceEngine::InferencePlugin _plugin;               // OpenVino inference plugin
+        InferenceEngine::CNNNetwork _network;                   // The logical CNN network
+        InferenceEngine::ExecutableNetwork _exe_network;        // The actual object which will excute the request
+        InferenceEngine::InputsDataMap _inputInfor;
+        InferenceEngine::OutputsDataMap _outputInfor;
     public:
+        // lock 
+        // lock with std::lock_guard<std::mutex> lock(m);
+        // std::lock_guard is RAII, so it will release when run out of scope, no need to unlock
+        // ! Never use m->lock() and m->unlock(), use std lock guards instead
+        // ! Why? what if your thread throws an exception before unlock m?
+        // ! Deadlock cannot occur, but livelock can, scheduler need?
+        std::mutex m;
         // default constructor
         ssdFPGA();
+        // constructor;
+        ssdFPGA(string _device, string _xml, string _l);
         // default destructor
         ~ssdFPGA();
         // run inference with input is stream from network
         // return a vector of bbox
-        vector<bbox> run(const char*);
+        vector<bbox> run(const char*, int size);
         // get the metadata
         lwCNN get();
     };
 
 //-------------------------------------------------------------------------
 
-    ssdFPGA::ssdFPGA() {
+    ssdFPGA::ssdFPGA(string _device, string _xml, string _l) {
         // we should follow the RAII
         // Acquire proper resouces during constructor
         // TODO: discover and lock FPGA card, reprogramming the device and ready to launch
-
+        cout << "Loading FPGA Plugin" << endl;
+        init_plugin(_device,_plugin);
+        load_network(_xml,_l,_labels,_network);
+        init_IO(_network,_inputInfor,_outputInfor);
+        load_plugin(_plugin,_network,_exe_network);
+        cout << "Load FPGA plugin successful" << endl;
     }
 
     ssdFPGA::~ssdFPGA() {
@@ -155,8 +269,58 @@ namespace ncl {
     }
 
 
-    vector<bbox> ssdFPGA::run(const char *data) {
+    vector<bbox> ssdFPGA::run(const char *data, int size) {
         // TODO: implement
-        return runtest(data);
+        // return run_test(data);
+        
+        // decode out image
+        cv::Mat frame = cv::imdecode(cv::Mat(1,size,CV_8UC3, (unsigned char*) data),cv::IMREAD_UNCHANGED);
+        cout << frame.size().width << endl;
+        cout << frame.size().height << endl;
+        // create new request
+        InferRequest::Ptr infer_request = _exe_network.CreateInferRequestPtr();
+        frameToBlob(frame, infer_request, _inputInfor.begin()->first);
+        vector<bbox> ret;
+        infer_request->StartAsync();
+        cout << frame.size().width << endl;
+        cout << frame.size().height << endl;
+        if (infer_request->Wait(IInferRequest::WaitMode::RESULT_READY) == OK) {
+            DataPtr& output = _outputInfor.begin()->second;
+            auto outputName = _outputInfor.begin()->first;
+            const SizeVector outputDims = output->getTensorDesc().getDims();
+            const int maxProposalCount = outputDims[2];
+            const int objectSize = outputDims[3];
+            const int width = frame.size().width;
+            const int height = frame.size().height;
+            const float *detections = infer_request->GetBlob(outputName)->buffer().as<PrecisionTrait<Precision::FP32>::value_type*>();
+            for (int i = 0; i < maxProposalCount; i++) {
+                float image_id = detections[i * objectSize + 0];
+                if (image_id < 0) {
+                    // std::cout << "Only " << i << " proposals found" << std::endl;
+                    break;
+                }
+
+                float confidence = detections[i * objectSize + 2];
+                auto label_id = static_cast<int>(detections[i * objectSize + 1]);
+                int xmin = detections[i * objectSize + 3] * width;
+                int ymin = detections[i * objectSize + 4] * height;
+                int xmax = detections[i * objectSize + 5] * width;
+                int ymax = detections[i * objectSize + 6] * height;
+                auto label = _labels[label_id-1];
+
+                if (confidence > 0.5) {
+                    bbox d;
+                    d.prop = confidence;
+                    d.label_id = label_id;
+                    d.label = label;
+                    d.c[0] = xmin;
+                    d.c[1] = ymin;
+                    d.c[2] = xmax;
+                    d.c[3] = ymax;
+                    ret.push_back(d);
+                }
+            }
+        }
+        return ret;
     }
 } // namespace ncl

@@ -28,7 +28,7 @@
 #include <sstream>
 #include <fstream>
 #include <chrono>
-
+#include <mutex>
 // Custom
 #include <ultis/ultis.h>
 #include "ssdFPGA.h"
@@ -49,7 +49,7 @@ using std::ofstream;
 using ncl::bbox;
 
 // global inference engine that run on our server
-ncl::ssdFPGA ie;
+ncl::ssdFPGA *ie;
 
 //------------------------------------------------------------------------------
 
@@ -205,15 +205,19 @@ handle_inference_request (http::request<Body,http::basic_fields<Allocator>> & re
     // assume we receive an image, first try to save it first
     beast::string_view ext = content_type.substr(6,content_type.size());
     cout << "reciveve image with type " << ext << std::endl;
-    std::string filename = "test." + std::string(ext);
+    // std::string filename = "test." + std::string(ext);
     // ofstream stream;
     // stream.open(filename.c_str());
     // stream << body;
     // stream.close();
     // cout << "Save file successful" << endl;
 
-    auto data = body.data();    
-    std::vector<bbox> prediction = ie.run(data);
+    auto data = body.data();
+    int size = body.size();
+    // lock the inference engine to prevent race condition
+    // TODO: can we do it lock-free?
+    std::lock_guard<std::mutex> lock(ie->m);
+    std::vector<bbox> prediction = ie->run(data,size);
     int n = prediction.size();
     // create property tree and write to json
     JSON res;                   // our response
@@ -231,7 +235,7 @@ handle_inference_request (http::request<Body,http::basic_fields<Allocator>> & re
         JSON p;
         p.put<int>("label_id",pred.label_id);
         p.put<std::string>("label",pred.label);
-        p.put<double>("confidences",pred.prop);
+        p.put<float>("confidences",pred.prop);
         JSON tmp;
         for (int i = 0; i < 4; ++i) {
             JSON v;
@@ -448,6 +452,10 @@ int main(int argc, char* argv[])
         }
         auto const address = net::ip::make_address(argv[1]);
         auto const port = static_cast<unsigned short>(std::atoi(argv[2]));
+        string const _device = "HETERO:FPGA,CPU";
+        string const _xml = "/home/canhld/workplace/MEC_FPGA_DEMO/models/object_detection/common/ssdlite_mobilenet_v2_coco_2018_05_09/saved_model.xml";
+        string const _l = "/home/canhld/workplace/MEC_FPGA_DEMO/models/object_detection/common/ssd.labels";
+        ie = new ncl::ssdFPGA(_device,_xml, _l);
 
         // The io_context is required for all I/O
         net::io_context ioc{1};
@@ -463,10 +471,10 @@ int main(int argc, char* argv[])
             acceptor.accept(socket);
 
             // Launch the session, transferring ownership of the socket
-            std::thread{std::bind(
-                &do_session,
-                std::move(socket))}.detach();
-            // do_session(socket,doc_root);
+            // std::thread{std::bind(
+            //     &do_session,
+            //     std::move(socket))}.detach();
+            do_session(socket);
         }
     }
     catch (const std::exception& e)

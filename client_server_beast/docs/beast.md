@@ -89,9 +89,14 @@ template <
 using string_body = basic-string_body<std::char>
 ```
 
-As its name, `string_body` is a string. It use `std::string` as the container, and use _pre\_defined_ implementation of `read` and `write` in the STL as `reader` and `writer`. Cool, right? Nooooo. `string_body` is _just_ a string, but most of RESTful API should return **JSON**. We need a method to write and parse the JSON object ourself :(.  
+As its name, `string_body` is a string. It use `std::string` as the container, and use _pre\_defined_ implementation of `read` and `write` in the STL as `reader` and `writer`. Cool, right? Nooooo. `string_body` is _just_ a string, but most of RESTful API should return **JSON**. We need a method to write and parse the JSON object ourself :(. In general, `string_body` is an array of bytes, so it is also suitable to handle small `octet-stream` objects.
+
+In `body_string`, the type of body is `std::string`, so it's very easy to work with.
+
 [**file_body**](file_body)
 
 [**dynamic_body**](dynamic_body)
+
+`dynamic_body` implement dynamic buffers to handle objects. This is quite close to some of STL container (closest to `deque` as the author say). However, the implementation is messy and the logic of `read` and `write` to data is ambgious. Even the author doesn't recommend using it. Therefore, we may pass it by now.
 
 ## Protocol
