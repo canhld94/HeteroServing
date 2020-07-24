@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include <cstdlib>
+#include <chrono>
 
 /* 
     Type name template to retrieve type of variable 
@@ -142,3 +143,21 @@ std::string base64_decode(std::string const& encoded_string) {
 
   return ret;
 }
+
+// Hacker way to measure time
+#ifdef PROFILER
+std::chrono::time_point<std::chrono::system_clock> PROFILE_start;
+std::chrono::time_point<std::chrono::system_clock> PROFILE_end;
+std::chrono::duration<double> PROFILE_elapsed_seconds;
+#define PROFILE(NAME,...) \
+      PROFILE_start = std::chrono::system_clock::now();\
+      __VA_ARGS__ \
+      PROFILE_end = std::chrono::system_clock::now(); \
+      PROFILE_elapsed_seconds = PROFILE_end - PROFILE_start; \
+      std::cout <<"[::PROFILE] " << NAME << ": " << PROFILE_elapsed_seconds.count() << " s" << std::endl; \
+#endif
+#else
+
+#define PROFILE(NAME,...) __VA_ARGS__
+
+#endif
