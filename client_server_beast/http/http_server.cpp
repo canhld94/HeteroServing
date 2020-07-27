@@ -157,8 +157,7 @@ greeting () {
        << "\"from\": \"canhld@kaist.ac.kr\",\n" 
        << "\"message\": \"welcome to SSD inference server version 1\",\n"
        << "\"what next\": \"GET /v1/ for supported API\"\n"
-       << "}";
-    std::cout << ss.str() << std::endl;
+       << "}\n";
     return ss.str();
 }
 
@@ -174,8 +173,7 @@ handle_metadata_request () {
     ss << std::fixed << "{\n"
        << "\"from\": \"canhld@kaist.ac.kr\",\n" 
        << "\"message\": \"this is metadata request\"\n"
-       << "}";
-    std::cout << ss.str() << std::endl;
+       << "}\n";
     return ss.str();
 }
 
@@ -196,28 +194,19 @@ handle_inference_request (http::request<Body,http::basic_fields<Allocator>> & re
     auto &header = req.base();
     // string body --> basic_string
     auto &body = req.body();
-    std::cout << header["content-type"] << std::endl;
     beast::string_view const &content_type = header["content-type"];
     if (content_type.find("image/") == std::string::npos) {
         return "{\n\"message\":\"not an image\"\n}";
     }
-    // image content type is image/jpeg, how to pass to our container?
-    // assume we receive an image, first try to save it first
-    beast::string_view ext = content_type.substr(6,content_type.size());
-    cout << "reciveve image with type " << ext << std::endl;
-    // std::string filename = "test." + std::string(ext);
-    // ofstream stream;
-    // stream.open(filename.c_str());
-    // stream << body;
-    // stream.close();
-    // cout << "Save file successful" << endl;
 
     auto data = body.data();
     int size = body.size();
     // lock the inference engine to prevent race condition
     // TODO: can we do it lock-free?
-    std::lock_guard<std::mutex> lock(ie->m);
-    std::vector<bbox> prediction = ie->run(data,size);
+    // std::lock_guard<std::mutex> lock(ie->m);
+    std::vector<bbox> prediction;
+    // exception handling in run, no need to santiny check
+    prediction = ie->run(data,size);
     int n = prediction.size();
     // create property tree and write to json
     JSON res;                   // our response
@@ -278,8 +267,7 @@ handle_request(
     if (target.size() == 0) {
         return send(error_message(req,http::status::bad_request,"Illegal request-target"));
     }
-    std::cout << "Recieve request to resource " << target << std::endl;
-
+    
     // Handle the case where the resource doesn't exist
     if(ec == beast::errc::no_such_file_or_directory)
         return send(error_message(req,http::status::not_found,"Not found"));
@@ -333,6 +321,7 @@ handle_request(
             return send(error_message(req,http::status::bad_request,"Illegal HTTP method"));
         }
         // Cache the size since we need it after the move
+        PROFILE ("construct response",
         auto const size = body.size();
         http::response<http::string_body> res{
             std::piecewise_construct,
@@ -342,7 +331,11 @@ handle_request(
         res.set(http::field::content_type, "application/json");
         res.content_length(size);
         res.keep_alive(req.keep_alive());
-        return send(std::move(res));
+        );
+        PROFILE ("send",
+        send(std::move(res));
+        );
+        return;
     }
 }
 
@@ -385,8 +378,10 @@ struct send_lambda
         // We need the serializer here because the serializer requires
         // a non-const file_body, and the message oriented version of
         // http::write only works with const messages.
+        PROFILE ("serialize and write",
         http::serializer<isRequest, Body, Fields> sr{msg};
         http::write(stream_, sr, ec_);
+        );
     }
 };
 
@@ -395,12 +390,13 @@ void
 do_session(
     tcp::socket& socket)
 {
-    auto start = std::chrono::system_clock::now();
     bool close = false;
     beast::error_code ec;
 
     // This buffer is required to persist across reads
     beast::flat_buffer buffer;
+    // Try to reserve buffer first
+    buffer.reserve(1024*1024);
 
     // This lambda is used to send messages
     send_lambda<tcp::socket> lambda{socket, close, ec};
@@ -408,15 +404,21 @@ do_session(
     for(;;)
     {
         // Read a request
+        //! Very slow reading from socket -> why?
+        PROFILE ("read request",
         http::request<http::string_body> req;
+        req.body().reserve(1024*1024);
         http::read(socket, buffer, req, ec);
+        );
         if(ec == http::error::end_of_stream)
             break;
         if(ec)
             return fail(ec, "read");
 
         // Send the response
+        PROFILE ("handle request",
         handle_request(std::move(req), lambda);
+        );
         if(ec)
             return fail(ec, "write");
         if(close)
@@ -427,12 +429,10 @@ do_session(
         }
     }
     // Send a TCP shutdown
+    PROFILE ("shutdown socket",
     socket.shutdown(tcp::socket::shutdown_send, ec);
-
+    );
     // At this point the connection is closed gracefully
-    auto end = std::chrono::system_clock::now();
-    std::chrono::duration<double> elapsed_seconds = end - start; 
-    std::cout << "Done season in " << elapsed_seconds.count()<< " s" << std::endl;
 }
 
 //------------------------------------------------------------------------------
@@ -452,8 +452,8 @@ int main(int argc, char* argv[])
         }
         auto const address = net::ip::make_address(argv[1]);
         auto const port = static_cast<unsigned short>(std::atoi(argv[2]));
-        string const _device = "HETERO:FPGA,CPU";
-        string const _xml = "/home/canhld/workplace/MEC_FPGA_DEMO/models/object_detection/common/ssdlite_mobilenet_v2_coco_2018_05_09/saved_model.xml";
+        string const _device = "CPU";
+        string const _xml = "/home/canhld/workplace/MEC_FPGA_DEMO/models/object_detection/common/ssdlite_mobilenet_v2_coco_2018_05_09/saved_model_FP32.xml";
         string const _l = "/home/canhld/workplace/MEC_FPGA_DEMO/models/object_detection/common/ssd.labels";
         ie = new ncl::ssdFPGA(_device,_xml, _l);
 
@@ -471,11 +471,16 @@ int main(int argc, char* argv[])
             acceptor.accept(socket);
 
             // Launch the session, transferring ownership of the socket
-            // std::thread{std::bind(
-            //     &do_session,
-            //     std::move(socket))}.detach();
-            do_session(socket);
+            // ! Critical: OpenVINO crash with multi-thread
+            std::thread{std::bind(
+                &do_session,
+                std::move(socket))}.detach();
+            // do_session(socket);
         }
+    }
+    catch (const cv::Exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        // as it's opencv error, just print error
     }
     catch (const std::exception& e)
     {
@@ -483,3 +488,17 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 }
+
+
+
+/************************ some testing code chunk ************************/
+
+// image content type is image/jpeg, how to pass to our container?
+// assume we receive an image, first try to save it first
+// beast::string_view ext = content_type.substr(6,content_type.size());
+// std::string filename = "test." + std::string(ext);
+// ofstream stream;
+// stream.open(filename.c_str());
+// stream << body;
+// stream.close();
+// cout << "Save file successful" << endl;

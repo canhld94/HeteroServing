@@ -38,6 +38,18 @@ demo_apps/
 
 What have been done and what to learn up to
 
+## ---- 2020 / 07 / 27 ----
+
+- TODO: implement test client
+- Implement thread-safe queue solution for FPGA inference
+
+## ---- 2020 / 07 / 25 ----
+
+- So much, first working version
+- Problem:
+  - With FPGA: Device can't be access with multi-thread, so the current server solution is not working
+  - Without FPGA: TTFB and content download time is higher than ussual, idk
+
 ## ---- 2020 / 07 / 23 ----
 
 - handle image data from client using `http::string_body` --> `char` array in JPEG form
