@@ -147,7 +147,7 @@ namespace helper {
         auto inputName = inputInfo.begin()->first;
         input->setPrecision(Precision::U8);
         // input->getPreProcess().setResizeAlgorithm(ResizeAlgorithm::RESIZE_BILINEAR);
-        input->getInputData()->setLayout(Layout::NHWC);
+        input->getInputData()->setLayout(Layout::NCHW);
 
         // Output Blob
 
@@ -303,7 +303,7 @@ namespace ncl {
                     int ymax = detections[i * objectSize + 6] * height;
                     auto label = _labels[label_id-1];
 
-                    if (confidence > 0.5) {
+                    if (confidence > 0.45) {
                         bbox d;
                         d.prop = confidence;
                         d.label_id = label_id;

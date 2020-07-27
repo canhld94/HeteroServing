@@ -454,6 +454,7 @@ int main(int argc, char* argv[])
         auto const port = static_cast<unsigned short>(std::atoi(argv[2]));
         string const _device = "CPU";
         string const _xml = "/home/canhld/workplace/MEC_FPGA_DEMO/models/object_detection/common/ssdlite_mobilenet_v2_coco_2018_05_09/saved_model_FP32.xml";
+        // string const _xml = "/home/canhld/workplace/MEC_FPGA_DEMO/models/object_detection/common/ssd/300/caffe/models/VGGNet/VOC0712Plus/SSD_300x300_ft/VGG_VOC0712Plus_SSD_300x300_ft_iter_160000.xml";
         string const _l = "/home/canhld/workplace/MEC_FPGA_DEMO/models/object_detection/common/ssd.labels";
         ie = new ncl::ssdFPGA(_device,_xml, _l);
 
