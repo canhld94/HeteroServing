@@ -61,6 +61,7 @@ endif()
 
 include_directories (
         ${CMAKE_CURRENT_SOURCE_DIR}/common
+        ${CMAKE_CURRENT_SOURCE_DIR}/ncl
 )
 
 find_package(InferenceEngine 1.6 REQUIRED)
@@ -69,15 +70,15 @@ find_package(InferenceEngine 1.6 REQUIRED)
 set (CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_SOURCE_DIR})
 # Project components
 add_subdirectory(format_reader) # helper library @Intel
-# add_subdirectory(ssd_standalone) # SSD demonstration standalone
+add_subdirectory(ssd_standalone) # SSD demonstration standalone
+add_subdirectory(ssd_inference_server) # SSD inference server (release)
+add_subdirectory(client_server_beast) # development http server folder
 
-add_subdirectory(client_server_beast)
-
-# install (TARGETS  format_reader ie_cpu_extension ssd_standalone
-#         RUNTIME DESTINATION bin
-#         LIBRARY DESTINATION bin/lib
-#         ARCHIVE DESTINATION bin/lib
-# )
+install (TARGETS ie_cpu_extension
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION bin/lib
+        ARCHIVE DESTINATION bin/lib
+)
 
 if (UNIX)
     set (LIB_DL dl)

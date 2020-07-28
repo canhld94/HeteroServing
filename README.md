@@ -40,8 +40,12 @@ What have been done and what to learn up to
 
 ## ---- 2020 / 07 / 27 ----
 
-- TODO: implement test client
-- Implement thread-safe queue solution for FPGA inference
+- TODO: implement test client --> Done
+- Implement thread-safe queue solution for FPGA inference?
+- _What next?_:
+  - structure of the cluster? proxy, nodes, ..etc
+  - Other type of http server in boost (async, SSL, Auth, thread-pool)
+  - _Remember_: Bug in `read` that increas TTFB time in the client size!!!
 
 ## ---- 2020 / 07 / 25 ----
 
