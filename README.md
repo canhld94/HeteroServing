@@ -1,12 +1,14 @@
+![CMake CI](https://github.com/canhld94/mec-inference-server/workflows/CMake%20CI/badge.svg)
+
 # Read me for an easy life
 
 1. What is this project?  
 This project build the demo for MEC project in 2020. The main objective is building an FPGA inference server running deep learning algorithms on Intel FPGA and expose RESTful APIs to users.
 
-2. Important notes
+2. Important notes  
 Language: C++  
 Build Tool: CMake  
-Testing: GTest
+Testing: GTest  
 Library: STL, Boost, GFlags
 
 3. Directory structure
