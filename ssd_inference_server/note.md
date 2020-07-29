@@ -87,8 +87,6 @@ data = res.read()
 print(res.status, res.reason)
 print(data.decode('utf-8'))
 print(res.getheaders())
-~
-
 ```
 
 ### Response format

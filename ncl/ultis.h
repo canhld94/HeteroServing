@@ -1,3 +1,7 @@
+// Copyright (C) 2020 canhld@.kaist.ac.kr
+// SPDX-License-Identifier: Apache-2.0
+//
+
 #include <type_traits>
 #include <typeinfo>
 #ifndef _MSC_VER
@@ -9,22 +13,24 @@
 #include <chrono>
 
 // Hacker way to measure time
+//! DON'T use it recursively. If you do it recursively, only read the innermost result
 #ifdef PROFILER
 std::chrono::time_point<std::chrono::system_clock> PROFILE_start;
 std::chrono::time_point<std::chrono::system_clock> PROFILE_end;
-std::chrono::duration<double> PROFILE_elapsed_seconds;
+std::chrono::duration<double,std::milli> PROFILE_elapsed_seconds;
 #define PROFILE(NAME,...) \
       PROFILE_start = std::chrono::system_clock::now();\
       __VA_ARGS__ \
       PROFILE_end = std::chrono::system_clock::now(); \
       PROFILE_elapsed_seconds = PROFILE_end - PROFILE_start; \
-      std::cout <<"[::PROFILE] " << NAME << ": " << PROFILE_elapsed_seconds.count() << " s" << std::endl; \
-#endif
+      std::cout <<"[::PROFILE] " << NAME << ": " << PROFILE_elapsed_seconds.count() << " ms" << std::endl; \
+
 #else
 
 #define PROFILE(NAME,...) __VA_ARGS__
 
 #endif
+
 
 namespace ncl {
   /* 
@@ -162,3 +168,4 @@ namespace ncl {
     return ret;
   }
 }
+

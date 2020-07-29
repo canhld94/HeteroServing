@@ -13,9 +13,9 @@
 //
 //------------------------------------------------------------------------------
 
-#include <boost/beast/core.hpp>
-#include <boost/beast/http.hpp>
-#include <boost/beast/version.hpp>
+#include <include_dev/boost/beast/core.hpp>
+#include <include_dev/boost/beast/http.hpp>
+#include <include_dev/boost/beast/version.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/config.hpp>
 #include <boost/property_tree/json_parser.hpp>
@@ -30,6 +30,7 @@
 #include <chrono>
 #include <mutex>
 // Custom
+#define PROFILER
 #include <ultis.h> // from ncl
 #include <ssdFPGA.h> // from ncl
 
@@ -317,7 +318,9 @@ handle_request(
     else { 
         // Respond to POST request
         if (target == "inference") {
+            PROFILE("running inference",
             body = handle_inference_request(req);
+            ); //! PROFILE
         }
         else {
             return send(error_message(req,http::status::bad_request,"Illegal HTTP method"));
@@ -333,7 +336,7 @@ handle_request(
         res.set(http::field::content_type, "application/json");
         res.content_length(size);
         res.keep_alive(req.keep_alive());
-        );
+        ); //! PROFILE
         PROFILE ("send",
         send(std::move(res));
         );
@@ -411,7 +414,7 @@ do_session(
         http::request<http::string_body> req;
         req.body().reserve(1024*1024);
         http::read(socket, buffer, req, ec);
-        );
+        ); //! PROFILE
         if(ec == http::error::end_of_stream)
             break;
         if(ec)
@@ -420,7 +423,7 @@ do_session(
         // Send the response
         PROFILE ("handle request",
         handle_request(std::move(req), lambda);
-        );
+        ); //! PROFILE
         if(ec)
             return fail(ec, "write");
         if(close)
@@ -433,7 +436,7 @@ do_session(
     // Send a TCP shutdown
     PROFILE ("shutdown socket",
     socket.shutdown(tcp::socket::shutdown_send, ec);
-    );
+    ); //! PROFILE
     // At this point the connection is closed gracefully
 }
 
@@ -454,8 +457,8 @@ int main(int argc, char* argv[])
         }
         auto const address = net::ip::make_address(argv[1]);
         auto const port = static_cast<unsigned short>(std::atoi(argv[2]));
-        string const _device = "HETERO:FPGA,CPU";
-        string const _xml = "/home/canhld/workplace/MEC_FPGA_DEMO/models/object_detection/common/ssdlite_mobilenet_v2_coco_2018_05_09/saved_model.xml";
+        string const _device = "CPU";
+        string const _xml = "/home/canhld/workplace/MEC_FPGA_DEMO/models/object_detection/common/ssdlite_mobilenet_v2_coco_2018_05_09/saved_model_FP32.xml";
         // string const _xml = "/home/canhld/workplace/MEC_FPGA_DEMO/models/object_detection/common/ssd/300/caffe/models/VGGNet/VOC0712Plus/SSD_300x300_ft/VGG_VOC0712Plus_SSD_300x300_ft_iter_160000.xml";
         string const _l = "/home/canhld/workplace/MEC_FPGA_DEMO/models/object_detection/common/ssd.labels";
         ie = new ncl::ssdFPGA(_device,_xml, _l,0);
@@ -473,12 +476,13 @@ int main(int argc, char* argv[])
             // Block until we get a connection
             acceptor.accept(socket);
 
+            PROFILE("############# new session #############",{});
             // Launch the session, transferring ownership of the socket
             // ! Critical: OpenVINO crash with multi-thread
-            // std::thread{std::bind(
-            //     &do_session,
-            //     std::move(socket))}.detach();
-            do_session(socket);
+            std::thread{std::bind(
+                &do_session,
+                std::move(socket))}.detach();
+            // do_session(socket);
         }
     }
     catch (const cv::Exception& e) {

@@ -99,4 +99,49 @@ In `body_string`, the type of body is `std::string`, so it's very easy to work w
 
 `dynamic_body` implement dynamic buffers to handle objects. This is quite close to some of STL container (closest to `deque` as the author say). However, the implementation is messy and the logic of `read` and `write` to data is ambgious. Even the author doesn't recommend using it. Therefore, we may pass it by now.
 
-## Protocol
+## Parser
+
+## Async model
+
+Using sync model is simple, however if we want to do it in a professional way, async is the road to go.
+
+Async model refers to async __threading__ model:
+
+- In sync mode: your main thread listen for the connections, once it recieve a connection, it create a worker thread, transers the connection ownership (the socket) to this worker thread and this worker will run the application code.
+
+```C++ Example usecase of non-blocking model
+// endpoint to the new connection
+tcp::socket sock{ioc};
+// accept new request, block untill we get a connection
+acceptor.accept(socket);
+// create new worker to handle the request, pass the ownership of endpoint to the workder
+std::thread t{std::bin(&my_fking_awesome_handler,std::move(sock))};
+// no wait, the worker should done the job w/o any relation to the main thread
+t.detach();
+```
+
+- In async mode: your main threads spawns a group of worker threads, each thread may do different jobs. E.g. some thread will listening to incomming connection and handling them, some will perform dedicated tasks. These worker work independenly, but they still share resources (make_shared).
+
+```C++ Example usecase of blocking model
+// listening and handling incomming connection
+void listen_and_handler();
+// do some dedicated task
+void do_fking_awesome_task();
+// group of thread that will accept the connection
+std::vector<std::thread> vt;
+vt.reserve(10);
+for ()
+
+```
+
+When using async model, we have better control of your server and can do fine-grained optimization for each thread. However, we can also encounter some problems:
+
+- Thread communication: if each thread run independently without co-operation, async is no better than sync model. When they do, we should think about how do they communicate and how they co-operate to finish a task efficiently.
+- We will need some "thread-safe" data strutures. Sometime using only locks is not enough.
+
+Async mode refer to __http IO__ mode:
+
+- In sync mode: most of operator is blocking: `accept` is blocking until we recieve a connection, `read` is blocking untill we finish reading the stream,...
+- In async mode: operator is non-blocking, but it will be associate with a handler when the operator return.
+
+As a rule of thumbs, we ususally use sync IO mode with sync model and async IO mode and async model, simply because they fit each other

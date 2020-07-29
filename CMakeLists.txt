@@ -70,8 +70,8 @@ find_package(InferenceEngine 1.6 REQUIRED)
 set (CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_SOURCE_DIR})
 # Project components
 add_subdirectory(format_reader) # helper library @Intel
-add_subdirectory(ssd_standalone) # SSD demonstration standalone
-add_subdirectory(ssd_inference_server) # SSD inference server (release)
+# add_subdirectory(ssd_standalone) # SSD demonstration standalone
+# add_subdirectory(ssd_inference_server) # SSD inference server (release)
 add_subdirectory(client_server_beast) # development http server folder
 
 install (TARGETS ie_cpu_extension

@@ -1,5 +1,6 @@
-
-
+// Copyright (C) 2020 canhld@.kaist.ac.kr
+// SPDX-License-Identifier: Apache-2.0
+//
 // C include
 #include <stdio.h>
 #include <signal.h>
@@ -146,7 +147,6 @@ namespace helper {
         InputInfo::Ptr& input = inputInfo.begin()->second;
         auto inputName = inputInfo.begin()->first;
         input->setPrecision(Precision::U8);
-        // input->getPreProcess().setResizeAlgorithm(ResizeAlgorithm::RESIZE_BILINEAR);
         input->getInputData()->setLayout(Layout::NCHW);
 
         // Output Blob
@@ -158,7 +158,6 @@ namespace helper {
         DataPtr& output = outputInfo.begin()->second;
         auto outputName = outputInfo.begin()->first;
         const SizeVector outputDims = output->getTensorDesc().getDims();
-        // const int maxProposalCount = outputDims[2];
         const int objectSize = outputDims[3];
         if (objectSize != 7) {
             throw std::logic_error("Output should have 7 as a last dimension");
@@ -212,18 +211,20 @@ namespace ncl {
 
     /*
         SSD class that implement everything we need
+        // ? Should we make it a singleton class
     */
 
     class ssdFPGA {
-    private:                                       // path to labels file
-        vector<string> _labels;
+    private:
+        vector<string> _labels;                                 // path to labels file
         InferenceEngine::InferencePlugin _plugin;               // OpenVino inference plugin
         InferenceEngine::CNNNetwork _network;                   // The logical CNN network
         InferenceEngine::ExecutableNetwork _exe_network;        // The actual object which will excute the request
         InferenceEngine::InputsDataMap _inputInfor;
         InferenceEngine::OutputsDataMap _outputInfor;
+        std::thread worker;                                     // thread that will carry out the object
     public:
-        // lock 
+        // !deprecated
         // lock with std::lock_guard<std::mutex> lock(m);
         // std::lock_guard is RAII, so it will release when run out of scope, no need to unlock
         // ! Never use m->lock() and m->unlock(), use std lock guards instead
@@ -232,8 +233,8 @@ namespace ncl {
         std::mutex m;
         // default constructor
         ssdFPGA();
-        // constructor;
-        ssdFPGA(string _device, string _xml, string _l);
+        // constructor for running in producer-consumer model
+        ssdFPGA(string _device, string _xml, string _l, int _detach);
         // default destructor
         ~ssdFPGA();
         // run inference with input is stream from network
@@ -245,7 +246,7 @@ namespace ncl {
 
 //-------------------------------------------------------------------------
 
-    ssdFPGA::ssdFPGA(string _device, string _xml, string _l) {
+    ssdFPGA::ssdFPGA(string _device, string _xml, string _l, int _detach) {
         // we should follow the RAII
         // Acquire proper resouces during constructor
         // TODO: discover and lock FPGA card, reprogramming the device and ready to launch

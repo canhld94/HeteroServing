@@ -38,6 +38,12 @@ demo_apps/
 
 What have been done and what to learn up to
 
+## ---- 2020 / 07 / 29 ----
+
+- TODO: make SSDFPGA class singleton?
+- Implement http server in async-model
+- Thread-safe queue
+
 ## ---- 2020 / 07 / 27 ----
 
 - TODO: implement test client --> Done

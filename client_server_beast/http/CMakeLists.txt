@@ -5,11 +5,13 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+# This testing server use a modified version of beast for better opitmization
 link_directories(${LIB_FOLDER})
 
-add_executable(http_server http_server.cpp)
+add_executable(http_server http_server_async.cpp)
 
 add_executable(http_client http_client.cpp)
+
 
 set_target_properties(http_server PROPERTIES "CMAKE_CXX_FLAGS" "${CMAKE_CXX_FLAGS} -fPIE")
 set_target_properties(http_client PROPERTIES "CMAKE_CXX_FLAGS" "${CMAKE_CXX_FLAGS} -fPIE")
@@ -19,10 +21,12 @@ SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")
 add_dependencies(http_server format_reader ie_cpu_extension)
 
 target_include_directories(http_server PRIVATE 
+                            "/home/canhld/workplace/MEC_FPGA_DEMO/beast/"
                             ${InferenceEngine_INCLUDE_DIRS} 
                             ${Boost_INCLUDE_DIRS}
                             ${OpenCV_INCLUDE_DIRS}
                             ${GFLAGS_INCLUDE_DIRS})
+
 target_include_directories(http_client PRIVATE ${Boost_INCLUDE_DIRS})
 
 target_link_libraries(http_server 
