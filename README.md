@@ -40,9 +40,14 @@ What have been done and what to learn up to
 
 ## ---- 2020 / 07 / 29 ----
 
-- TODO: make SSDFPGA class singleton?
-- Implement http server in async-model
-- Thread-safe queue
+- TODO: make ssdFPGA class singleton? -> no
+- Instead, we make shared_ptr from one object and pass it to worker threads to ignore global variable
+- Implement http server in async-model -> done -> still reading take longer than ususal
+- _What next?_:
+  - Test with fast http server to see if it improve reading performance __fast__
+  - Thread-safe queue implementation __learn__
+  - Need more investigate on `asio` and `beast` parsing to understand the server code __learn__
+  - Impelment producer-consumer model for FPGA inderence __learn__
 
 ## ---- 2020 / 07 / 27 ----
 
