@@ -1,6 +1,4 @@
-![CMake CI](https://github.com/canhld94/mec-inference-server/workflows/CMake%20CI/badge.svg)
-
-# Read me for an easy life
+# MEC Inferecne Server ![CMake CI](https://github.com/canhld94/mec-inference-server/workflows/CMake%20CI/badge.svg)
 
 1. What is this project?  
 This project build the demo for MEC project in 2020. The main objective is building an FPGA inference server running deep learning algorithms on Intel FPGA and expose RESTful APIs to users.
