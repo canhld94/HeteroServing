@@ -7,6 +7,7 @@
 set(TARGET_NAME "ssd_standalone")
 
 # Find OpenCV components if exist
+find_package(InferenceEngine 1.6 REQUIRED)
 find_package(OpenCV COMPONENTS highgui videoio imgproc REQUIRED)
 find_package(GFLAGS REQUIRED)
 

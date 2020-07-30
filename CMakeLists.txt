@@ -64,8 +64,6 @@ include_directories (
         ${CMAKE_CURRENT_SOURCE_DIR}/ncl
 )
 
-find_package(InferenceEngine 1.6 REQUIRED)
-
 # Install to root
 set (CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_SOURCE_DIR})
 # Project components
@@ -77,12 +75,6 @@ set (CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_SOURCE_DIR})
 # Testing
 add_subdirectory(test)
 enable_testing()
-
-install (TARGETS ie_cpu_extension
-        RUNTIME DESTINATION bin
-        LIBRARY DESTINATION bin/lib
-        ARCHIVE DESTINATION bin/lib
-)
 
 if (UNIX)
     set (LIB_DL dl)

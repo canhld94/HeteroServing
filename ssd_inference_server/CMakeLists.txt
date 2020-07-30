@@ -6,6 +6,7 @@ set(TARGET_NAME "ssd_inference_server")
 
 # Find OpenCV components if exist
 # These examples require Boost Beast
+find_package(InferenceEngine 1.6 REQUIRED)
 find_package(Boost REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(GFLAGS REQUIRED)
@@ -46,11 +47,11 @@ target_link_libraries(${TARGET_NAME}
                     ${InferenceEngine_LIBRARIES}
                     ${GFLAGS_LIBRARIES})
 
-install(TARGETS ${TARGET_NAME}
+install(TARGETS ${TARGET_NAME} ie_cpu_extension
                     RUNTIME DESTINATION bin
                     LIBRARY DESTINATION bin/lib
                     ARCHIVE DESTINATION bin/lib
-            )
+        )
 if(UNIX)
     target_link_libraries( ${TARGET_NAME} ${LIB_DL} pthread)
 endif()
