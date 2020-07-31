@@ -12,10 +12,11 @@
 // Example: HTTP server, synchronous
 //
 //------------------------------------------------------------------------------
+#define BOOST_ASIO_ENABLE_HANDLER_TRACKING
 
-#include <include_dev/boost/beast/core.hpp>
-#include <include_dev/boost/beast/http.hpp>
-#include <include_dev/boost/beast/version.hpp>
+#include <boost/beast/core.hpp>
+#include <boost/beast/http.hpp>
+#include <boost/beast/version.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/config.hpp>
 #include <boost/property_tree/json_parser.hpp>
@@ -39,6 +40,8 @@ namespace http = beast::http;           // from <boost/beast/http.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
 namespace bpt = boost::property_tree;   // from <boots/property_tree>
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
+// typedef implementation_defined no_delay;    // use TCP_NODELAY 
+
 
 typedef bpt::ptree JSON;                // just hiding the ugly name
 
@@ -318,15 +321,12 @@ handle_request(
     else { 
         // Respond to POST request
         if (target == "inference") {
-            PROFILE("running inference",
             body = handle_inference_request(req);
-            ); //! PROFILE
         }
         else {
             return send(error_message(req,http::status::bad_request,"Illegal HTTP method"));
         }
         // Cache the size since we need it after the move
-        PROFILE ("construct response",
         auto const size = body.size();
         http::response<http::string_body> res{
             std::piecewise_construct,
@@ -336,10 +336,7 @@ handle_request(
         res.set(http::field::content_type, "application/json");
         res.content_length(size);
         res.keep_alive(req.keep_alive());
-        ); //! PROFILE
-        PROFILE ("send",
         send(std::move(res));
-        );
         return;
     }
 }
@@ -383,10 +380,8 @@ struct send_lambda
         // We need the serializer here because the serializer requires
         // a non-const file_body, and the message oriented version of
         // http::write only works with const messages.
-        PROFILE ("serialize and write",
         http::serializer<isRequest, Body, Fields> sr{msg};
         http::write(stream_, sr, ec_);
-        );
     }
 };
 
@@ -400,8 +395,6 @@ do_session(
 
     // This buffer is required to persist across reads
     beast::flat_buffer buffer;
-    // Try to reserve buffer first
-    buffer.reserve(1024*1024);
 
     // This lambda is used to send messages
     send_lambda<tcp::socket> lambda{socket, close, ec};
@@ -412,7 +405,6 @@ do_session(
         //! Very slow reading from socket -> why?
         PROFILE ("read request",
         http::request<http::string_body> req;
-        req.body().reserve(1024*1024);
         http::read(socket, buffer, req, ec);
         ); //! PROFILE
         if(ec == http::error::end_of_stream)
@@ -475,6 +467,10 @@ int main(int argc, char* argv[])
 
             // Block until we get a connection
             acceptor.accept(socket);
+
+            // disable Nagle algorithm
+            tcp::no_delay option(true);
+            socket.set_option(option);
 
             PROFILE("############# new session #############",{});
             // Launch the session, transferring ownership of the socket

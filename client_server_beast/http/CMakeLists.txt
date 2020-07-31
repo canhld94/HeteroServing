@@ -1,6 +1,3 @@
-# Copyright (C) 2018-2019 Intel Corporation
-# SPDX-License-Identifier: Apache-2.0
-#
 # Copyright (C) 2020 canhld@kaist.ac.kr
 # SPDX-License-Identifier: Apache-2.0
 #

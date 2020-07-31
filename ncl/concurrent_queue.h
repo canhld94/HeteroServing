@@ -30,7 +30,7 @@ namespace ncl {
         ssize_t size();
 
     private:
-        // use this lock to protect all all operator
+        // use this lock to protect all operator
         std::mutex mtx;
         // the actuall queue
         std::queue<T> qe;
@@ -38,7 +38,7 @@ namespace ncl {
 
     template <class T>
     concurrent_queue<T>::concurrent_queue() {
-
+        
     }
     template <class T>
     concurrent_queue<T>::~concurrent_queue() {

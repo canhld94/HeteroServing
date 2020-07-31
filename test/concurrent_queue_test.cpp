@@ -34,6 +34,24 @@ namespace {
         Q.pop();
         EXPECT_EQ(Q.front(),2);
     }
+
+    TEST(dequeue,empty) {
+        ncl::concurrent_queue<int> Q;
+        auto consumer = [&]() {
+            while (Q.empty()) {}
+            sleep(0.01);
+            Q.pop();
+        };
+        auto producer = [&]() {
+            Q.push(1);
+        };
+        std::thread c0(std::bind(consumer)), c1(std::bind(consumer)); // consumers
+        std::thread p0(std::bind(producer)); // producers
+        p0.detach();
+        c0.join();
+        c1.join();
+        EXPECT_EQ(Q.empty(),true);
+    }
 }
 
 int main(int argc, char** argv) {
