@@ -38,6 +38,14 @@ demo_apps/
 
 What have been done and what to learn up to
 
+## ---- 2020 / 08 / 02 ----
+
+- Resoving the reading from socket problem, it's actually in the client size, not server size
+- Adding simple implementation of concurrent queue, adding test and CMAKE CI on github
+- _What next?:_
+  - Impelment producer-consumer model for FPGA inderence __learn__ --> on going
+  - Implement classes of workers: http-workers, inference-workers, websocket-workers
+
 ## ---- 2020 / 07 / 29 ----
 
 - TODO: make ssdFPGA class singleton? -> no

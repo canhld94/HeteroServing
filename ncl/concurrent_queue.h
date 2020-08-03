@@ -20,6 +20,8 @@ namespace ncl {
         ~concurrent_queue();
         // push an element to queue
         void push(T&&);
+        // push an element to queue
+        void push(T&);
         // get the front element of queue
         T front();
         // pop the element from queue --> may want to try_pop()?
@@ -47,6 +49,12 @@ namespace ncl {
 
     template <class T>
     void concurrent_queue<T>::push(T&& val) {
+        std::lock_guard<std::mutex> lock(mtx);
+        qe.push(val);
+    }
+
+    template <class T>
+    void concurrent_queue<T>::push(T& val) {
         std::lock_guard<std::mutex> lock(mtx);
         qe.push(val);
     }

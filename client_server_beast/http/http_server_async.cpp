@@ -12,6 +12,7 @@
 // Example: HTTP server, synchronous
 //
 //------------------------------------------------------------------------------
+#define BOOST_ASIO_ENABLE_HANDLER_TRACKING
 
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>

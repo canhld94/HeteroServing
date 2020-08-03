@@ -1,6 +1,8 @@
 // Copyright (C) 2020 canhld@.kaist.ac.kr
 // SPDX-License-Identifier: Apache-2.0
 //
+#ifndef NCL_ULTIS_H
+#define NCL_ULTIS_H
 
 #include <type_traits>
 #include <typeinfo>
@@ -168,4 +170,4 @@ namespace ncl {
     return ret;
   }
 }
-
+#endif

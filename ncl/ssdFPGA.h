@@ -209,12 +209,17 @@ namespace ncl {
     using namespace common;
     using namespace InferenceEngine;
 
+    // wrapper of OpenVino inference engine
+    class inference_engine {
+
+    };
+
     /*
         SSD class that implement everything we need
         // ? Should we make it a singleton class
     */
 
-    class ssdFPGA {
+    class ssdFPGA : public inference_engine {
     private:
         vector<string> _labels;                                 // path to labels file
         InferenceEngine::InferencePlugin _plugin;               // OpenVino inference plugin
@@ -244,6 +249,17 @@ namespace ncl {
         lwCNN get();
     };
 
+    class yolo : public inference_engine {
+
+    };
+
+    class frcnn : public inference_engine {
+
+    };
+
+    class resnet : public inference_engine {
+
+    };
 //-------------------------------------------------------------------------
 
     ssdFPGA::ssdFPGA(string _device, string _xml, string _l, int _detach) {
