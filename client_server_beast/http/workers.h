@@ -19,7 +19,9 @@
 #include <sstream>
 #include <fstream>
 #include <chrono>
+#include <ctime>
 #include <mutex>
+#include <condition_variable>
 
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
@@ -31,10 +33,12 @@ using std::cout;
 using std::endl;
 using std::ofstream;
 
-#include <ultis.h> // from ncl
-#include <ssdFPGA.h> // from ncl
-#include <concurrent_queue.h> // from ncl;
+#include <ultis.h>                  // from ncl
+#include <ssdFPGA.h>                // from ncl
+#include <concurrent_queue.h>       // from ncl;
+#include <tbb/concurrent_queue.h>   // Intel tbb concurent queue
 
+using tbb::concurrent_bounded_queue;        // TODO: replace with own queue
 using ncl::bbox;
 using ncl::ssdFPGA;
 
@@ -44,13 +48,14 @@ using ncl::ssdFPGA;
         std::vector<bbox> predictions;
         msg m(data,key,&predictions);
 */
-struct msg {
+class msg {
+public:
     const char *data;               // the pointer that hold actual data
     int size;                       // size of the data
     std::vector<bbox> *predictions; // the prediction, inference engine will write the result here
-    int key;                        // key of the message, int is enought in current system
-    msg(): data(nullptr) {};
-    msg(const char* _data, int _size, std::vector<bbox> *_predictions, int _key):
+    std::string key;                // key of the message, int is enought in current system
+    msg(): data(nullptr), size(-1), predictions(nullptr), key("") {}
+    msg(const char* _data, int _size, std::vector<bbox>* _predictions, std::string _key):
         data(_data), size(_size), predictions(_predictions), key(_key) { }
 };
 
@@ -137,8 +142,8 @@ mime_type(beast::string_view path)
 */
 class worker {
 public:
-    worker();
-    virtual ~worker();
+    // worker();
+    // virtual ~worker();
 };
 
 /*
@@ -149,20 +154,39 @@ public:
 
 */
 class inference_worker : public worker {
+private:
+    std::shared_ptr<ssdFPGA> Ie;
+    std::shared_ptr<concurrent_bounded_queue<msg>> TaskQueue; 
+    std::shared_ptr<std::condition_variable> cv;
+    std::shared_ptr<std::mutex> mtx;
+    std::shared_ptr<std::string> key;
 public:
+    inference_worker() = delete;
+    inference_worker(std::shared_ptr<ssdFPGA> _Ie, std::shared_ptr<concurrent_bounded_queue<msg>> _TaskQueue, 
+                    std::shared_ptr<std::condition_variable> _cv, std::shared_ptr<std::mutex> _mtx, 
+                    std::shared_ptr<std::string> _key):
+                    Ie(_Ie), TaskQueue(_TaskQueue), cv(_cv), mtx(_mtx), key(_key)
+                    {
+                        std::cout << "init inference worker" << std::endl;
+                    }
     void run() { 
         // start listening to the queue
-        // TODO: implement the queue, inference worker will sleep while queue is empty()
-        msg m = TaskQueue->front(); //! find other way to do it
-        TaskQueue->pop();
-        *m.predictions = Ie->run(m.data, m.size);
-        // Push to queue and notify the http_worker
-        EventQueue->push(m.key);
+        try {
+            for (;;) {
+                std::cout << "IE: wating for new task" << std::endl;
+                msg m; //! find other way to do it
+                TaskQueue->pop(m);
+                std::lock_guard<std::mutex> lk(*mtx);
+                *m.predictions = Ie->run(m.data, m.size);
+                // Push to queue and notify the http_worker
+                *key = m.key;
+                cv->notify_all();
+            }
+        }
+        catch(const std::exception& e) {
+            std::cerr << e.what() << '\n';
+        }
     }
-private:
-    std::shared_ptr<ssdFPGA> Ie; // pointer to inference engine
-    std::shared_ptr<ncl::concurrent_queue<msg>> TaskQueue; // pointer to the task queue
-    std::shared_ptr<ncl::concurrent_queue<int>> EventQueue; // pointer to the event queue
 };
 
 /*
@@ -177,13 +201,20 @@ private:
     tcp::socket sock{acceptor.get_executor()};              // the endpoint socket, passed from main thread
     std::shared_ptr<ssdFPGA> Ie;                            // pointer to inference engine in case we use CPU inference
     void *data;                                             // pointer to data, i.e dashboard
-    std::shared_ptr<ncl::concurrent_queue<msg>> TaskQueue;  // task queue for inference with FPGA
-    std::shared_ptr<ncl::concurrent_queue<int>> EventQueue; // event queue for inference with FPGA
+    std::shared_ptr<concurrent_bounded_queue<msg>> TaskQueue; 
+    std::shared_ptr<std::condition_variable> cv;
+    std::shared_ptr<std::mutex> mtx;
+    std::shared_ptr<std::string> key;
 public:
+    http_worker() = delete;
     /* Most frequently used constructor */
-    http_worker(tcp::acceptor& _acceptor, tcp::socket&& _sock, std::shared_ptr<ssdFPGA> _Ie, void *_data):
-            acceptor(_acceptor), sock(std::move(_sock)), Ie(_Ie), data(_data) {
-            }
+    http_worker(tcp::acceptor& _acceptor, tcp::socket&& _sock, std::shared_ptr<ssdFPGA> _Ie, void *_data, 
+                std::shared_ptr<concurrent_bounded_queue<msg>> _TaskQueue, 
+                std::shared_ptr<std::condition_variable> _cv, std::shared_ptr<std::mutex> _mtx, 
+                std::shared_ptr<std::string> _key):
+                acceptor(_acceptor), sock(std::move(_sock)), Ie(_Ie), data(_data), TaskQueue(_TaskQueue),
+                cv(_cv), mtx(_mtx), key(_key)
+                {}
     /* Default destructor */
     ~http_worker() {}
     /* Start the worker */
@@ -301,10 +332,27 @@ private:
         }
 
         auto data = body.data();
-        auto size = body.size();
+        int size = body.size();
         std::vector<bbox> prediction;
         // exception handling in run, no need to santiny check
-        prediction = Ie->run(data,size);
+        if (Ie) {
+            // in this case, we can run IE ourself
+            prediction = Ie->run(data,size);
+        }
+        else {
+            // need to pass to inference worker
+            std::ostringstream ss;
+            ss << std::this_thread::get_id();
+            std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()
+            );
+            ss << std::to_string(ms.count());
+            msg m{data,size,&prediction,ss.str()};
+            cout << m.key << endl;
+            TaskQueue->push(m);
+            std::unique_lock<std::mutex>lk(*mtx);
+            cv->wait(lk,[&](){return m.key == *key;});
+        }
         int n = prediction.size();
         // create property tree and write to json
         JSON res;                   // our response
