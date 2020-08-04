@@ -38,6 +38,14 @@ demo_apps/
 
 What have been done and what to learn up to
 
+## ---- 2020 / 08 / 04 ----
+
+- Finish implement http-workers, and run with sync server but only CPU device
+- _What next?_:
+  - refactoring the inference engine
+  - Implement inference worker
+  - Implement producer-consumer model temporlary use intel TBB queue
+
 ## ---- 2020 / 08 / 02 ----
 
 - Resoving the reading from socket problem, it's actually in the client size, not server size
