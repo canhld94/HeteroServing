@@ -172,9 +172,13 @@ namespace helper {
     void load_plugin(InferencePlugin& plugin,
                      CNNNetwork& network,
                      ExecutableNetwork &exe_network) {
+        try {
+            exe_network = plugin.LoadNetwork(network, {});
+        }
+        catch(const std::exception& e) {
+            std::cout << e.what() << '\n';
+        }
         
-        exe_network = plugin.LoadNetwork(network, {});
-
     }
 
     void frameToBlob(const cv::Mat& frame,
@@ -209,17 +213,13 @@ namespace ncl {
     using namespace common;
     using namespace InferenceEngine;
 
-    // wrapper of OpenVino inference engine
-    class inference_engine {
-
-    };
 
     /*
         SSD class that implement everything we need
         // ? Should we make it a singleton class
     */
 
-    class ssdFPGA : public inference_engine {
+    class ssdFPGA {
     private:
         vector<string> _labels;                                 // path to labels file
         InferenceEngine::InferencePlugin _plugin;               // OpenVino inference plugin
@@ -227,7 +227,6 @@ namespace ncl {
         InferenceEngine::ExecutableNetwork _exe_network;        // The actual object which will excute the request
         InferenceEngine::InputsDataMap _inputInfor;
         InferenceEngine::OutputsDataMap _outputInfor;
-        std::thread worker;                                     // thread that will carry out the object
     public:
         // !deprecated
         // lock with std::lock_guard<std::mutex> lock(m);
@@ -248,30 +247,32 @@ namespace ncl {
         // get the metadata
         lwCNN get();
     };
-
-    class yolo : public inference_engine {
-
-    };
-
-    class frcnn : public inference_engine {
-
-    };
-
-    class resnet : public inference_engine {
-
-    };
 //-------------------------------------------------------------------------
+
+    ssdFPGA::ssdFPGA() {
+        
+    }
 
     ssdFPGA::ssdFPGA(string _device, string _xml, string _l, int _detach) {
         // we should follow the RAII
         // Acquire proper resouces during constructor
         // TODO: discover and lock FPGA card, reprogramming the device and ready to launch
-        cout << "Loading FPGA Plugin" << endl;
-        init_plugin(_device,_plugin);
-        load_network(_xml,_l,_labels,_network);
-        init_IO(_network,_inputInfor,_outputInfor);
-        load_plugin(_plugin,_network,_exe_network);
-        cout << "Load FPGA plugin successful" << endl;
+        try
+        {
+            cout << "Init FPGA Plugin" << endl;
+            init_plugin(_device,_plugin);
+            cout << "Loading FPGA Network" << endl;
+            load_network(_xml,_l,_labels,_network);
+            cout << "Init FPGA IO" << endl;
+            init_IO(_network,_inputInfor,_outputInfor);
+            cout << "Loading FPGA Plugin" << endl;
+            load_plugin(_plugin,_network,_exe_network);
+            cout << "Load FPGA plugin successful" << endl;
+        }
+        catch(const std::exception& e)
+        {
+            std::cout << e.what() << '\n';
+        }
     }
 
     ssdFPGA::~ssdFPGA() {
@@ -293,18 +294,22 @@ namespace ncl {
         try {
             // decode out image
             cv::Mat frame = cv::imdecode(cv::Mat(1,size,CV_8UC3, (unsigned char*) data),cv::IMREAD_UNCHANGED);
+            const int width = frame.size().width;
+            const int height = frame.size().height;
+            std::cout << width << " " << height << std::endl;
             // create new request
             InferRequest::Ptr infer_request = _exe_network.CreateInferRequestPtr();
+            std::cout << width << " " << height << std::endl;
             frameToBlob(frame, infer_request, _inputInfor.begin()->first);
-            infer_request->StartAsync();
-            if (infer_request->Wait(IInferRequest::WaitMode::RESULT_READY) == OK) {
+            infer_request->Infer();
+            std::cout << width << " " << height << std::endl;
+            // if (infer_request->Wait(IInferRequest::WaitMode::RESULT_READY) == OK) {
+                std::cout << width << " " << height << std::endl;
                 DataPtr& output = _outputInfor.begin()->second;
                 auto outputName = _outputInfor.begin()->first;
                 const SizeVector outputDims = output->getTensorDesc().getDims();
                 const int maxProposalCount = outputDims[2];
                 const int objectSize = outputDims[3];
-                const int width = frame.size().width;
-                const int height = frame.size().height;
                 const float *detections = infer_request->GetBlob(outputName)->buffer().as<PrecisionTrait<Precision::FP32>::value_type*>();
                 for (int i = 0; i < maxProposalCount; i++) {
                     float image_id = detections[i * objectSize + 0];
@@ -332,7 +337,7 @@ namespace ncl {
                         ret.push_back(d);
                     }
                 }
-            }
+            // }
             return ret;
         }
         catch (const cv::Exception &e) {

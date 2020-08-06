@@ -42,11 +42,11 @@ using tbb::concurrent_bounded_queue;        // TODO: replace with own queue
 using ncl::bbox;
 using ncl::ssdFPGA;
 
-/* 
-    message struct, use between http worker and inferences worker
-    ussage in http_worker:
-        std::vector<bbox> predictions;
-        msg m(data,key,&predictions);
+/**
+ * @brief message struct, use between http worker and inferences worker
+ * @example 
+ * std::vector<bbox> predictions;
+ * msg m(data,key,&predictions);
 */
 class msg {
 public:
@@ -60,9 +60,9 @@ public:
 };
 
 
-/* 
-    This is the C++11 equivalent of a generic lambda.
-    The function object is used to send an HTTP message. 
+/**
+ * @brief This is the C++11 equivalent of a generic lambda.
+ * @brief function object is used to send an HTTP message. 
 */
 template<class Stream>
 struct send_lambda
@@ -97,8 +97,8 @@ struct send_lambda
     }
 };
 
-/* 
-    Return mime_type base on the path of the string
+/**
+ * @brief Return mime_type base on the path of the string
 */
 
 beast::string_view
@@ -136,9 +136,9 @@ mime_type(beast::string_view path)
     return "application/text";
 }
 
-/*
-    General worker thread
-    TODO: add logger
+/**
+ * @brief General worker thread
+ * TODO: add logger
 */
 class worker {
 public:
@@ -146,16 +146,18 @@ public:
     // virtual ~worker();
 };
 
-/*
-    Inference worker that will run the inference engine
-    CPU or GPU backend: multi-workers is availble 
-    FPGA backend: there is one and only one worker, other while system will crash
-    Exception-safe
+/**
+ * @brief Inference worker that will run the inference engine
+ * @details 
+ * CPU or GPU backend: multi-workers is availble,
+ * FPGA backend: there is one and only one worker, other while system will crash
+ * 
+ * @exception 
+ */
 
-*/
 class inference_worker : public worker {
 private:
-    std::shared_ptr<ssdFPGA> Ie;
+    std::shared_ptr<ssdFPGA> Ie; ///
     std::shared_ptr<concurrent_bounded_queue<msg>> TaskQueue; 
     std::shared_ptr<std::condition_variable> cv;
     std::shared_ptr<std::mutex> mtx;
@@ -189,12 +191,13 @@ public:
     }
 };
 
-/*
-    http worker that will handler the request
-    In sync mode, each time when server receive  request, it will create a new 
-    thread that run http worker class
-*/
-
+/**
+ * @brief http worker that will handler the request
+ * @details 
+ * In sync mode, each time when server receive request, 
+ * it will create a newthread that run http worker class
+ * 
+ */
 class http_worker : public worker {
 private:
     tcp::acceptor& acceptor;                                // the acceptor, needed to init our socket
@@ -207,7 +210,6 @@ private:
     std::shared_ptr<std::string> key;
 public:
     http_worker() = delete;
-    /* Most frequently used constructor */
     http_worker(tcp::acceptor& _acceptor, tcp::socket&& _sock, std::shared_ptr<ssdFPGA> _Ie, void *_data, 
                 std::shared_ptr<concurrent_bounded_queue<msg>> _TaskQueue, 
                 std::shared_ptr<std::condition_variable> _cv, std::shared_ptr<std::mutex> _mtx, 
@@ -222,9 +224,15 @@ public:
         session_handler();
     }
 private:
-    /* 
-        This funtion send a error to the client
-        Depend on the error code, server should send different message 
+   /**
+    * @brief This funtion generate error response 
+    * @details Depend on the type of error status, different responses messages are generated
+    * @tparam Body 
+    * @tparam Alocator 
+    * @param req 
+    * @param status 
+    * @param why 
+    * @return http::response<http::string_body> 
     */
     template <class Body, class Alocator>
     http::response<http::string_body> 
@@ -238,12 +246,15 @@ private:
         return res;
     } //! error_message
 
-    /* 
-        This function resolve the request target to route it
-        to proper resource. Raise ec::no_such_file if the 
-        resource doesn't exist
-    */
 
+   /**
+    * @brief This function resolve the request target to route it to proper resource.
+    * 
+    * @param target 
+    * @param ec 
+    * @return std::string 
+    * @exception raise ec::no_such_file if the resource doesn't exist
+    */
     std::string
     request_resolve (beast::string_view const &target, beast::error_code &ec) {
         // Now do it as simple as possible
@@ -385,6 +396,7 @@ private:
         bpt::write_json(ss,res);
         return ss.str();
     } //! inferennce_request_handler
+
 
     /* Request handler */
     template <class Body, class Allocator, class Send>
