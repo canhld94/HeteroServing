@@ -38,6 +38,30 @@ demo_apps/
 
 What have been done and what to learn up to
 
+## ---- 2020 / 08 / 07 ----
+
+- Solve the crashing problem
+  - Root of the problem: FPGA driver send signal to wrong thread, it should be send to inference thread, but they always send it to listening worker (main thread). The main thread will call the interrupt handler in the mmd runtime lib, thus make it access to device and cause crashing (recall that openvino will always crash if more than one thread access to FPGA)
+  - __FIX__: Main thread will run inference, while another will run listening --> __WORKED__
+- _Problem_: Server with FPGA back-end hang when during stress test -> error in FPGA device or dead-lock in the task queue?
+- _What next?_:
+  - Solving the problem when FPGA-backed server hang
+  - refactoring the inference engine --> __learn__
+
+## ---- 2020 / 08 / 06 ----
+
+- Inference worker and listening worker (main thread cannot run together) --> __why__
+- When FPGA is invoked, inference thread crashs
+- This is not exception error but failed system call (system error), that make the whole process crashs
+- _What next?_:
+  - refactoring the inference engine --> __learn__
+
+## ---- 2020 / 08 / 05 ----
+
+- Inferences worker crash with FPGA inference while loading plugin --> __why__
+- _What next?_:
+  - refactoring the inference engine --> __learn__
+
 ## ---- 2020 / 08 / 04 ----
 
 - Finish implement http-workers, and run with sync server but only CPU device

@@ -142,8 +142,9 @@ mime_type(beast::string_view path)
 */
 class worker {
 public:
-    // worker();
-    // virtual ~worker();
+    worker() {}
+    virtual ~worker() {}
+    virtual void operator()() = 0;
 };
 
 /**
@@ -171,7 +172,10 @@ public:
                     {
                         std::cout << "init inference worker" << std::endl;
                     }
-    void run() { 
+    ~inference_worker() {
+
+    }
+    void operator()() { 
         // start listening to the queue
         try {
             for (;;) {
@@ -220,7 +224,7 @@ public:
     /* Default destructor */
     ~http_worker() {}
     /* Start the worker */
-    void start() {
+    void operator()() {
         session_handler();
     }
 private:
@@ -522,8 +526,74 @@ private:
         // Shut down the socket and return
         sock.shutdown(tcp::socket::shutdown_send,ec);
         return;
-    } // ! session_handler
-}; //! class http_worker
+    } // session_handler
+}; // class http_worker
+
+/**
+ * @brief listening worker that will listen to connection
+ * 
+ */
+
+class listen_worker {
+private: 
+    std::shared_ptr<tbb::concurrent_bounded_queue<msg>> TaskQueue;
+    std::shared_ptr<std::condition_variable> cv;
+    std::shared_ptr<std::mutex> mtx;
+    std::shared_ptr<std::string> key;
+    std::shared_ptr<ssdFPGA> Ie;
+    void listen(const char* ip, const char* p) {
+        pthread_setname_np(pthread_self(),"listen worker");
+        auto const address = net::ip::make_address(ip);
+        auto const port = static_cast<unsigned short>(std::stoi(p));
+        // the io_contex is required to all IO - boost asio implementation
+        net::io_context ioc{1}; // we have only 1 listening thread in sync model
+        // the acceptor that will recieve incomming request
+        cout << "Start accepting" << endl;
+        tcp::acceptor acceptor{ioc,{address,port}};
+        for(;;) {
+            // this socket will run 
+            tcp::socket sock{ioc};
+            // accep, blocking until new connection
+            acceptor.accept(sock);
+            // launch new http worker to handle new request
+            // transfer ownership of socket to the worker
+            auto f = [&](tcp::socket& _sock){
+                pthread_setname_np(pthread_self(),"http worker");
+                http_worker httper{acceptor, std::move(_sock), Ie, nullptr,TaskQueue, cv, mtx, key};
+                httper();
+            };
+            std::thread{
+                std::bind(f,std::move(sock))
+                }.detach();
+        }
+    }
+public:
+    listen_worker() = delete;
+    explicit
+    listen_worker(std::shared_ptr<tbb::concurrent_bounded_queue<msg>>&_TaskQueue,
+                  std::shared_ptr<std::condition_variable>& _cv,
+                  std::shared_ptr<std::mutex>& _mtx,
+                  std::shared_ptr<std::string>& _key,
+                  std::shared_ptr<ssdFPGA> _Ie):
+                  TaskQueue(_TaskQueue), cv(_cv), mtx(_mtx), key(_key), Ie(_Ie)
+                {}
+    ~listen_worker() {
+
+    }
+    void operator()() {
+        std::cout << "Warning: no IP and address is provide" << std::endl;
+        std::cout << "Use defaul address 0.0.0.0 and default port 8080" << std:: endl;
+        listen("0.0.0.0","8080");
+
+    }
+    void operator()(const char* ip, const char* port) {
+        listen(ip,port);
+    }
+    void destroy_ie() {
+        Ie = nullptr;
+    }
+};
+
 
 /*
     websocket worker, worker that deal with websocket season (e.g. stream)

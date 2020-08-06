@@ -267,7 +267,7 @@ namespace ncl {
             init_IO(_network,_inputInfor,_outputInfor);
             cout << "Loading FPGA Plugin" << endl;
             load_plugin(_plugin,_network,_exe_network);
-            cout << "Load FPGA plugin successful" << endl;
+            cout << "Load FPGA Plugin successful" << endl;
         }
         catch(const std::exception& e)
         {
@@ -288,7 +288,6 @@ namespace ncl {
 
 
     vector<bbox> ssdFPGA::run(const char *data, int size) {
-        // TODO: implement
         // return run_test(data);
         vector<bbox> ret; // return value
         try {
@@ -296,15 +295,11 @@ namespace ncl {
             cv::Mat frame = cv::imdecode(cv::Mat(1,size,CV_8UC3, (unsigned char*) data),cv::IMREAD_UNCHANGED);
             const int width = frame.size().width;
             const int height = frame.size().height;
-            std::cout << width << " " << height << std::endl;
             // create new request
             InferRequest::Ptr infer_request = _exe_network.CreateInferRequestPtr();
-            std::cout << width << " " << height << std::endl;
             frameToBlob(frame, infer_request, _inputInfor.begin()->first);
-            infer_request->Infer();
-            std::cout << width << " " << height << std::endl;
-            // if (infer_request->Wait(IInferRequest::WaitMode::RESULT_READY) == OK) {
-                std::cout << width << " " << height << std::endl;
+            infer_request->StartAsync();
+            if (infer_request->Wait(IInferRequest::WaitMode::RESULT_READY) == OK) {
                 DataPtr& output = _outputInfor.begin()->second;
                 auto outputName = _outputInfor.begin()->first;
                 const SizeVector outputDims = output->getTensorDesc().getDims();
@@ -316,7 +311,6 @@ namespace ncl {
                     if (image_id < 0) {
                         break;
                     }
-
                     float confidence = detections[i * objectSize + 2];
                     auto label_id = static_cast<int>(detections[i * objectSize + 1]);
                     int xmin = detections[i * objectSize + 3] * width;
@@ -337,7 +331,7 @@ namespace ncl {
                         ret.push_back(d);
                     }
                 }
-            // }
+            }
             return ret;
         }
         catch (const cv::Exception &e) {
