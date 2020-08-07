@@ -18,22 +18,18 @@ SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")
 add_dependencies(http_server format_reader ie_cpu_extension)
 
 target_include_directories(http_server PRIVATE 
-                            "/home/canhld/workplace/MEC_FPGA_DEMO/beast/"
                             ${InferenceEngine_INCLUDE_DIRS} 
-                            ${Boost_INCLUDE_DIRS}
-                            ${OpenCV_INCLUDE_DIRS}
-                            ${GFLAGS_INCLUDE_DIRS})
+                            ${OpenCV_INCLUDE_DIRS})
 
 target_include_directories(http_client PRIVATE ${Boost_INCLUDE_DIRS})
 
 target_link_libraries(http_server 
                         IE::ie_cpu_extension
-                        ${Boost_LIBRARIES} 
+                        ${CONAN_LIBS}
                         ${OpenCV_LIBRARIES}
-                        ${InferenceEngine_LIBRARIES}
-                        ${GFLAGS_LIBRARIES})
+                        ${InferenceEngine_LIBRARIES})
 target_link_libraries(http_client 
-                        ${Boost_LIBRARIES})
+                      ${CONAN_LIBS})
 
 install(TARGETS http_client http_server
         RUNTIME DESTINATION bin

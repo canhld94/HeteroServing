@@ -64,6 +64,15 @@ include_directories (
         ${CMAKE_CURRENT_SOURCE_DIR}/ncl
 )
 
+# Package manager
+# OpenCV and Inference Engine and TBB come with openvino
+find_package(OpenCV REQUIRED)
+find_package(InferenceEngine 1.6 REQUIRED)
+
+# Other libraries: boost, gflags, gtest, spdlog is managed by conan
+include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+conan_basic_setup()
+
 # Install to root
 set (CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_SOURCE_DIR})
 # Project components

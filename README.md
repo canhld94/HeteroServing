@@ -4,10 +4,17 @@
 This project build the demo for MEC project in 2020. The main objective is building an FPGA inference server running deep learning algorithms on Intel FPGA and expose RESTful APIs to users.
 
 2. Important notes  
-Language: C++  
-Build Tool: CMake  
-Testing: GTest  
-Library: STL, Boost, GFlags
+
+- Language: C++  
+- Build Tool: CMake  
+- Package Manager: Conan  
+- Dependencies:
+
+  - OpenVino: deep learning framework
+  - Boost: socket and IPC, networking, HTTP parsing and serializing, JSON parsing and serializing
+  - GFlags: argv parsing
+  - GTest: testing
+  - Intel Thread Building Block: concurrency queues
 
 3. Directory structure
 

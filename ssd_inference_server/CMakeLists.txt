@@ -4,12 +4,7 @@
 
 set(TARGET_NAME "ssd_inference_server")
 
-# Find OpenCV components if exist
-# These examples require Boost Beast
-find_package(InferenceEngine 1.6 REQUIRED)
-find_package(Boost REQUIRED)
-find_package(OpenCV REQUIRED)
-find_package(GFLAGS REQUIRED)
+
 
 file (GLOB MAIN_SRC
         ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
@@ -36,21 +31,18 @@ COMPILE_PDB_NAME ${TARGET_NAME})
 
 target_include_directories(${TARGET_NAME} PRIVATE 
                             ${InferenceEngine_INCLUDE_DIRS} 
-                            ${Boost_INCLUDE_DIRS}
-                            ${OpenCV_INCLUDE_DIRS}
-                            ${GFLAGS_INCLUDE_DIRS})
+                            ${OpenCV_INCLUDE_DIRS})
 
 target_link_libraries(${TARGET_NAME} 
                     IE::ie_cpu_extension
-                    ${Boost_LIBRARIES} 
                     ${OpenCV_LIBRARIES}
                     ${InferenceEngine_LIBRARIES}
-                    ${GFLAGS_LIBRARIES})
+                    ${CONAN_LIBS})
 
 install(TARGETS ${TARGET_NAME} ie_cpu_extension
-                    RUNTIME DESTINATION bin
-                    LIBRARY DESTINATION bin/lib
-                    ARCHIVE DESTINATION bin/lib
+                RUNTIME DESTINATION bin
+                LIBRARY DESTINATION bin/lib
+                ARCHIVE DESTINATION bin/lib
         )
 if(UNIX)
     target_link_libraries( ${TARGET_NAME} ${LIB_DL} pthread)

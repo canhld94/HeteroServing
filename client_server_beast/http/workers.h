@@ -22,6 +22,8 @@
 #include <ctime>
 #include <mutex>
 #include <condition_variable>
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/basic_file_sink.h>
 
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
@@ -170,7 +172,7 @@ public:
                     std::shared_ptr<std::string> _key):
                     Ie(_Ie), TaskQueue(_TaskQueue), cv(_cv), mtx(_mtx), key(_key)
                     {
-                        std::cout << "init inference worker" << std::endl;
+                        spdlog::info("Init inference worker!");
                     }
     ~inference_worker() {
 
@@ -179,7 +181,7 @@ public:
         // start listening to the queue
         try {
             for (;;) {
-                std::cout << "IE: wating for new task" << std::endl;
+                spdlog::info("Waiting for new task");
                 msg m; //! find other way to do it
                 TaskQueue->pop(m);
                 std::lock_guard<std::mutex> lk(*mtx);
@@ -363,7 +365,7 @@ private:
             );
             ss << std::to_string(ms.count());
             msg m{data,size,&prediction,ss.str()};
-            cout << m.key << endl;
+            spdlog::info("Genkey {}",m.key);
             TaskQueue->push(m);
             std::unique_lock<std::mutex>lk(*mtx);
             cv->wait(lk,[&](){return m.key == *key;});
@@ -586,8 +588,8 @@ public:
         listen("0.0.0.0","8080");
 
     }
-    void operator()(const char* ip, const char* port) {
-        listen(ip,port);
+    void operator()(std::string& ip, std::string& port) {
+        listen(ip.c_str(),port.c_str());
     }
     void destroy_ie() {
         Ie = nullptr;

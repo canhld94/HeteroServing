@@ -18,3 +18,6 @@ At the first glance, I think I can just use a `std::queue`, wrap it with the sam
 ### Thread-safe
 
 ### Exception-safety
+
+
+## Case study: Intel TBB concurrent_queue

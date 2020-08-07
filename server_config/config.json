@@ -1,0 +1,23 @@
+{
+  "ip": "0.0.0.0",
+  "port": "8080",
+  "inference engine": [
+    {
+      "name": "SSD object detection",
+      "device": "CPU",
+      "model": "/home/canhld/workplace/MEC_FPGA_DEMO/openvino_models/ssdlite_mobilenet_v2_fp32.xml",
+      "labels": "/home/canhld/workplace/MEC_FPGA_DEMO/openvino_models/ms_coco.txt",
+      "fpga configuration": {
+        "dev": "acla0",
+        "bitstream": "/opt/intel/openvino_2019.1.144/bitstreams/a10_devkit_bitstreams/2019R1_A10DK_FP16_MobileNet_Clamp.aocx"
+      }
+    },
+    {
+      "name": "YOLO object detection",
+      "device": "CPU",
+      "model": "yolo_v3.xml",
+      "labels": "yolo_labels.txt",
+      "fpga configuration": {}
+    }
+  ]
+}

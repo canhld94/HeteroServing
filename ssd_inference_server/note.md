@@ -2,7 +2,36 @@
 
 The FPGA Inference Server run SSD on FPGA (and CPU) and expose RESTFul APIs to end-users to utilize the infrence engine in client-server model. This is very similar to [Tensorflow Serving](https://github.com/tensorflow/serving), however, TF serving doesn't support FPGA back-end.
 
-__IMPORTANT__: Developing server at `143.248.148.118:8081`
+**IMPORTANT**: Developing server at `143.248.148.118:8081`
+
+## Server configuration
+
+```JSON
+{
+  "ip": "0.0.0.0",
+  "port": "8080",
+  "inference engine": [
+    {
+      "name": "SSD object detection",
+      "device": "HEHERO:FPGA,CPU",
+      "model": "ssd_mobilenet.xml",
+      "labels": "ssd_labels.txt",
+      "fpga configuration": {
+        "dev": "acla0",
+        "bitstream":"ADVK_A10_MOBILE.aocx"
+      }
+    },
+    {
+      "name": "YOLO object detection",
+      "device": "CPU",
+      "model": "yolo_v3.xml",
+      "labels": "yolo_labels.txt",
+      "fpga configuration": {
+      }
+    }
+  ]
+}
+```
 
 ## API specificiation
 
@@ -42,31 +71,31 @@ Content-Type: image/jpeg
 `Javascript`: (tested with nodejs 12.18.3)
 
 ```javascript
-const http = require('http');
-const fs = require('fs')
+const http = require("http");
+const fs = require("fs");
 const init = {
-  host: '143.248.148.118',
-  path: '/inference',
+  host: "143.248.148.118",
+  path: "/inference",
   port: 8081,
-  method: 'POST',
+  method: "POST",
   headers: {
-    'Content-Type': 'image/jpeg',
-  }
+    "Content-Type": "image/jpeg",
+  },
 };
-const callback = function(response) {
+const callback = function (response) {
   let result = Buffer.alloc(0);
-  response.on('data', function(chunk) {
+  response.on("data", function (chunk) {
     result = Buffer.concat([result, chunk]);
   });
 
-  response.on('end', function() {
+  response.on("end", function () {
     // result has response body buffer
     console.log(result.toString());
   });
 };
 
 const req = http.request(init, callback);
-const body = fs.readFileSync('img0.jpeg'); // replace with your file
+const body = fs.readFileSync("img0.jpeg"); // replace with your file
 req.write(body);
 req.end();
 ```
@@ -95,10 +124,10 @@ Example response of `GET /`
 
 ```json
 {
-    "type": "greeting",
-    "from": "canhld@kaist.ac.kr",
-    "message": "welcome to SSD inference server version 1",
-    "what next": "GET /v1/ for supported API"
+  "type": "greeting",
+  "from": "canhld@kaist.ac.kr",
+  "message": "welcome to SSD inference server version 1",
+  "what next": "GET /v1/ for supported API"
 }
 ```
 
@@ -106,8 +135,8 @@ Example response of `GET /metadata`
 
 ```json
 {
-    "from": "canhld@kaist.ac.kr",
-    "message": "this is metadata request"
+  "from": "canhld@kaist.ac.kr",
+  "message": "this is metadata request"
 }
 ```
 
@@ -140,6 +169,6 @@ Example response of `POST /inference`
       "confidences": "0.647054553",
       "detection_box": ["1169", "449", "1228", "476"]
     }
-    ]
+  ]
 }
 ```
