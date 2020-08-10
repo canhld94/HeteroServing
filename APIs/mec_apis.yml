@@ -1,0 +1,191 @@
+openapi: 3.0.0
+info:
+  description: This is the inference API
+  version: 1.0.0-oas3
+  title: MEC Inference Server
+  contact:
+    email: canhld@kaist.ac.kr
+  license:
+    name: Apache 2.0
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+servers:
+  - url: '//143.248.148.118:8080/v1'
+tags:
+  - name: server
+    description: Server
+  - name: model
+    description: Endpoint to the model
+  - name: inference engine
+    description: Endpoint to the inference engine
+paths:
+  /:
+    get:
+      tags:
+        - server
+      summary: Ereeting to user and basic information
+      operationId: searchInventory
+      description: |
+        Basic greeting to users and print APIs list
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                properties:
+                  type:
+                    type: string
+                    example: greeting
+                  from:
+                    type: string
+                    example: canhld@kaist.ac.kr
+                  message:
+                    type: string
+                    example: wellcome
+                  supported APIs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/APIs'
+  /services:
+    get:
+      tags:
+        - model
+      summary: Get the metadata of model currently running
+      operationId: getMetadata
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Services'
+  /inference:
+    post:
+      tags:
+        - inference engine
+      summary: Do the inference
+      operationId: doInference
+      requestBody:
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                properties:
+                  status:
+                    type: string
+                    format: string
+                    description: Status of the inference engine
+                    example: ok
+                  predictions: 
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Predictions'
+
+components:
+  schemas: 
+    APIs:
+      type: object
+      required:
+        - description
+        - path
+      properties:
+        description:
+          type: string
+          format: string
+          example: Do inference
+        path:
+          type: string
+          format: string
+          example: POST /inference
+
+    Services:
+      type: object
+      required:
+        - name
+        - model
+        - device
+      properties:
+        name:
+          type: string
+          format: string
+          description: Name of the services
+          example: SSD Object Detection MSCOCO
+        model:
+          type: string
+          format: string
+          description: Name of the model running on the machine
+          example: ssdlite_mobilenet_v2_fp32
+        labels:
+          type: string
+          format: string
+          description: Labels format
+          example: mscoco
+        accuracy:
+          type: string
+          format: string
+          description: Validation accuracy of the model
+          example: 36.1
+        device:
+          type: string
+          format: string
+          description: Device that the model is running on
+          example: 'HETERO:FPGA,CPU'
+        fpga:
+          $ref: '#/components/schemas/FPGAs'
+
+    FPGAs:
+      type: object
+      description: FPGA device information if running on FPGA
+      required:
+        - name
+        - device number
+        - bitstream
+      properties:
+        name:
+          type: string
+          format: string
+          description: name of the device
+          example: Arria 10 GX
+        device number:
+          type: string
+          format: string
+          description: device enumerate number
+          example: acla0
+        bitstream:
+          type: string
+          format: string
+          description: current bitsream on the divice
+          example: A10DK_MOBILENET_V2.aocx
+    
+    Predictions:
+      type: object
+      properties:
+        label_id: 
+          type: integer
+          format: string
+          description: Id of the label in the labels
+          example: 1
+        label:
+          type: string
+          format: string
+          description: label of the object
+          example: human
+        confidences:
+          type: string
+          format: string
+          description: confidences score of the prediction
+        detection_box:
+          type: array
+          items:
+            type: integer
+          example: [top_let_x,top_left_y,bottom_right_x,bottom_right_y]
+          

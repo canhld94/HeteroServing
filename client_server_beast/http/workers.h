@@ -166,7 +166,20 @@ private:
     std::shared_ptr<std::mutex> mtx;
     std::shared_ptr<std::string> key;
 public:
+    /**
+     * @brief Construct a new inference worker object
+     * 
+     */
     inference_worker() = delete;
+    /**
+     * @brief Construct a new inference worker object
+     * 
+     * @param _Ie 
+     * @param _TaskQueue 
+     * @param _cv 
+     * @param _mtx 
+     * @param _key 
+     */
     inference_worker(std::shared_ptr<ssdFPGA> _Ie, std::shared_ptr<concurrent_bounded_queue<msg>> _TaskQueue, 
                     std::shared_ptr<std::condition_variable> _cv, std::shared_ptr<std::mutex> _mtx, 
                     std::shared_ptr<std::string> _key):
@@ -174,9 +187,19 @@ public:
                     {
                         spdlog::info("Init inference worker!");
                     }
+    
+    /**
+     * @brief Destroy the inference worker object
+     * 
+     */
     ~inference_worker() {
 
     }
+
+    /**
+     * @brief 
+     * 
+     */
     void operator()() { 
         // start listening to the queue
         try {
@@ -215,7 +238,24 @@ private:
     std::shared_ptr<std::mutex> mtx;
     std::shared_ptr<std::string> key;
 public:
+    /**
+     * @brief Construct a new http worker object
+     * 
+     */
     http_worker() = delete;
+
+    /**
+     * @brief Construct a new http worker object
+     * 
+     * @param _acceptor 
+     * @param _sock 
+     * @param _Ie 
+     * @param _data 
+     * @param _TaskQueue 
+     * @param _cv 
+     * @param _mtx 
+     * @param _key 
+     */
     http_worker(tcp::acceptor& _acceptor, tcp::socket&& _sock, std::shared_ptr<ssdFPGA> _Ie, void *_data, 
                 std::shared_ptr<concurrent_bounded_queue<msg>> _TaskQueue, 
                 std::shared_ptr<std::condition_variable> _cv, std::shared_ptr<std::mutex> _mtx, 
@@ -223,9 +263,19 @@ public:
                 acceptor(_acceptor), sock(std::move(_sock)), Ie(_Ie), data(_data), TaskQueue(_TaskQueue),
                 cv(_cv), mtx(_mtx), key(_key)
                 {}
-    /* Default destructor */
+    
+    /**
+     * @brief 
+     * 
+     * @return * Default 
+     */
     ~http_worker() {}
-    /* Start the worker */
+
+    /**
+     * @brief 
+     * 
+     * @return * Start 
+     */
     void operator()() {
         session_handler();
     }
@@ -268,6 +318,7 @@ private:
         // current supported resources
         static const std::set<std::string> resources = {
             "/",
+            "v1"
             "metadata",
             "inference"
         };
@@ -291,10 +342,10 @@ private:
         return ret;
     } //! request_sovle
 
-    /* 
-        This function handles the request at GET /
-    */
-
+    /**
+     * @brief 
+     * 
+     */
     std::string
     greeting () {
         JSON res;
@@ -310,11 +361,12 @@ private:
         return ss.str();
     } //! greeting
 
-    /* 
-        This function handles the metadata request at GET /metadata 
-        TODO: Implement the function with proper resource
+    /**
+     * @brief 
+     * 
+     *
+     *  TODO: Implement the function with proper resource
     */
-
     std::string 
     metadata_request_handler () {
         std::ostringstream ss;
@@ -326,12 +378,11 @@ private:
         return ss.str();
     } //! metadata_request_handler
 
-    /*
-        This funtion handles the inference request at POST /inference
-        All request return string body, so its return type is std::string
-        should we format it with JSON?
-        TODO: Implement the handler to work with image data
-    */
+    /**
+     * @brief This funtion handles the inference request at POST /inference
+     * ?All request return string body, so its return type is std::string should we format it with JSON?
+     * TODO: Implement the handler to work with image data 
+     */
 
     template <class Body, class Allocator>
     std::string 
@@ -404,7 +455,13 @@ private:
     } //! inferennce_request_handler
 
 
-    /* Request handler */
+    /**
+     * @brief this is our handler
+     * 
+     * @param req 
+     * @param sender 
+     * @return * Request 
+     */
     template <class Body, class Allocator, class Send>
     void request_handler (http::request<Body, http::basic_fields<Allocator>>&& req, Send& sender) {
         // Make sure we can handle the method
@@ -486,12 +543,22 @@ private:
         }
     } //! request_handler
 
-    /* Report a failure */
+    /**
+     * @brief 
+     * 
+     * @param ec 
+     * @param what 
+     * @return * Report 
+     */
     void fail(beast::error_code ec, char const* what) {
         std::cerr << what << ": " << ec.message() << "\n";
     } //! fail
 
-    /* Session handler */
+    /**
+     * @brief 
+     * 
+     * @return * Session 
+     */
     void session_handler () {
         bool close = false;
         beast::error_code ec;
@@ -543,6 +610,14 @@ private:
     std::shared_ptr<std::mutex> mtx;
     std::shared_ptr<std::string> key;
     std::shared_ptr<ssdFPGA> Ie;
+
+private:
+    /**
+     * @brief 
+     * 
+     * @param ip 
+     * @param p 
+     */
     void listen(const char* ip, const char* p) {
         pthread_setname_np(pthread_self(),"listen worker");
         auto const address = net::ip::make_address(ip);
@@ -570,7 +645,21 @@ private:
         }
     }
 public:
+    /**
+     * @brief Construct a new listen worker object
+     * 
+     */
     listen_worker() = delete;
+
+    /**
+     * @brief Construct a new listen worker object
+     * 
+     * @param _TaskQueue 
+     * @param _cv 
+     * @param _mtx 
+     * @param _key 
+     * @param _Ie 
+     */
     explicit
     listen_worker(std::shared_ptr<tbb::concurrent_bounded_queue<msg>>&_TaskQueue,
                   std::shared_ptr<std::condition_variable>& _cv,
@@ -579,28 +668,49 @@ public:
                   std::shared_ptr<ssdFPGA> _Ie):
                   TaskQueue(_TaskQueue), cv(_cv), mtx(_mtx), key(_key), Ie(_Ie)
                 {}
+
+    /**
+     * @brief Destroy the listen worker object
+     * 
+     */
     ~listen_worker() {
 
     }
+
+    /**
+     * @brief 
+     * 
+     */
     void operator()() {
         std::cout << "Warning: no IP and address is provide" << std::endl;
         std::cout << "Use defaul address 0.0.0.0 and default port 8080" << std:: endl;
         listen("0.0.0.0","8080");
 
     }
+
+    /**
+     * @brief 
+     * 
+     * @param ip 
+     * @param port 
+     */
     void operator()(std::string& ip, std::string& port) {
         listen(ip.c_str(),port.c_str());
     }
+
+    /**
+     * @brief 
+     * 
+     */
     void destroy_ie() {
         Ie = nullptr;
     }
-};
+}; /// class listen worker
 
-
-/*
-    websocket worker, worker that deal with websocket season (e.g. stream)
-*/
-
+/**
+ * @brief 
+ * 
+ */
 class ws_worker : public worker {
 
 };
