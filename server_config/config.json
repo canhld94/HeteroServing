@@ -4,8 +4,8 @@
   "inference engine": [
     {
       "name": "SSD Object Detection",
-      "device": "CPU",
-      "model": "/home/canhld/workplace/MEC_FPGA_DEMO/openvino_models/ssdlite_mobilenet_v2_fp32.xml",
+      "device": "HETERO:FPGA,CPU",
+      "model": "/home/canhld/workplace/MEC_FPGA_DEMO/openvino_models/ssdlite_mobilenet_v2_fp16.xml",
       "labels": "/home/canhld/workplace/MEC_FPGA_DEMO/openvino_models/ms_coco.txt",
       "fpga configuration": {
         "dev": "acla0",

@@ -69,9 +69,10 @@ int main(int argc, char const *argv[])
 {
     try
     {
-            // Set the default logger to file logger
+        // Set the default logger to file logger
         auto file_logger = spdlog::basic_logger_mt("basic_logger", "logs/basic.txt");
-        spdlog::set_default_logger(file_logger);   
+        spdlog::set_default_logger(file_logger);
+        spdlog::set_level(spdlog::level::debug);
         spdlog::info("Log started!");
         // Check command line arguments.
         if (!ParseAndCheckCommandLine(argc, const_cast<char**>(argv))) {

@@ -1,6 +1,6 @@
 openapi: 3.0.0
 info:
-  description: This is the inference API
+  description: APIs specifications for MEC inferecne server
   version: 1.0.0-oas3
   title: MEC Inference Server
   contact:
@@ -12,7 +12,7 @@ servers:
   - url: '//143.248.148.118:8080/v1'
 tags:
   - name: server
-    description: Server
+    description: Server related APIs
   - name: model
     description: Endpoint to the model
   - name: inference engine
@@ -22,7 +22,7 @@ paths:
     get:
       tags:
         - server
-      summary: Ereeting to user and basic information
+      summary: Greeting
       operationId: searchInventory
       description: |
         Basic greeting to users and print APIs list
@@ -50,8 +50,10 @@ paths:
     get:
       tags:
         - model
-      summary: Get the metadata of model currently running
+      summary: Get services
       operationId: getMetadata
+      description: |
+        Get the metadata of model currently running
       responses:
         '200':
           description: ok
@@ -65,8 +67,10 @@ paths:
     post:
       tags:
         - inference engine
-      summary: Do the inference
+      summary: Do inference
       operationId: doInference
+      description: |
+        Request running inference engine in provided images
       requestBody:
         content:
           image/jpeg:

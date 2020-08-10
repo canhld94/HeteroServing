@@ -8,6 +8,7 @@
 #include <boost/asio/strand.hpp>
 #include <boost/config.hpp>
 #include <boost/property_tree/json_parser.hpp>
+#include <boost/lexical_cast.hpp>
 #include <algorithm>
 #include <cstdlib>
 #include <functional>
@@ -207,10 +208,12 @@ public:
                 spdlog::info("Waiting for new task");
                 msg m; //! find other way to do it
                 TaskQueue->pop(m);
+                spdlog::debug("inference worker {} attempt to accquire lock", boost::lexical_cast<std::string>(std::this_thread::get_id()));
                 std::lock_guard<std::mutex> lk(*mtx);
                 *m.predictions = Ie->run(m.data, m.size);
                 // Push to queue and notify the http_worker
                 *key = m.key;
+                spdlog::info("Broadcast key {}", m.key);
                 cv->notify_all();
             }
         }
@@ -418,7 +421,9 @@ private:
             msg m{data,size,&prediction,ss.str()};
             spdlog::info("Genkey {}",m.key);
             TaskQueue->push(m);
+            spdlog::debug("http worker {} attempt to accquire lock", boost::lexical_cast<std::string>(std::this_thread::get_id()));
             std::unique_lock<std::mutex>lk(*mtx);
+            spdlog::debug("http worker {} accquired lock", boost::lexical_cast<std::string>(std::this_thread::get_id()));
             cv->wait(lk,[&](){return m.key == *key;});
         }
         int n = prediction.size();
