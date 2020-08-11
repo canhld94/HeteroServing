@@ -8,6 +8,7 @@ This project build the demo for MEC project in 2020. The main objective is build
 - Language: C++  
 - Build Tool: CMake  
 - Package Manager: Conan  
+- APIs Spec: OpenAPI 3.0.0
 - Dependencies:
 
   - OpenVino: deep learning framework
@@ -44,6 +45,28 @@ demo_apps/
 ```
 
 What have been done and what to learn up to
+
+## ---- 2020 / 08 / 11 ----
+
+- Problem: deadlock
+- It seem that deadlock is caused by internal openvino synchronization, not by our program (this would be the worst case)
+- But why everything was fine when we run it only in 1 threads, need to check
+  - __IT DOES HAPPEN EVEN WITH SINGLE THREAD__ Did I check it before?
+  - It worth note that current producer-consumer model is much faster and more stable than single thread model
+  - System error?
+  
+## ---- 2020 / 08 / 10 ----
+
+- Problem: at the second request:
+  - http worker send the request but somehow do not wait for the inference worker but wake up and send respone to the client
+  - At the same time, the inference worker still recieve the data that http_worker passed to it and do the inference on this data, but soon when http worker is destroyed, all of it data is also deleted. So, inference worker run on invalid data and crash because of segfault
+- Reason: http worker doesn't return because client send keep alive signal, so the key is always 1 after first inference
+- Solution: http worker clear key after recieving result --> __WORKED__ but it lead to even worse situation
+
+## ---- 2020 / 08 / 10 ----
+
+- Problems: http worker accquire lock __before__ inference worker and wait for inference worker to broadcast its key, but inference worker can't broadcast key if they can't accquire lock --> deadlock
+- Solution maybe maybe maybe: each http worker have its own cv
 
 ## ---- 2020 / 08 / 07 ----
 
