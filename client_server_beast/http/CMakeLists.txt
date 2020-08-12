@@ -5,7 +5,7 @@
 # This testing server use a modified version of beast for better opitmization
 link_directories(${LIB_FOLDER})
 
-add_executable(http_server http_server.cpp workers.h)
+add_executable(http_server st_server.cpp)
 
 add_executable(http_client http_client.cpp)
 

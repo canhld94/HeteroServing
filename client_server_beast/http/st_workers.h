@@ -36,36 +36,19 @@ using std::cout;
 using std::endl;
 using std::ofstream;
 
-#include <ultis.h>                  // from ncl
-#include <ssdFPGA.h>                // from ncl
-#include <concurrent_queue.h>       // from ncl;
-#include <tbb/concurrent_queue.h>   // Intel tbb concurent queue
+#include "ultis.h"
+#include "ssdFPGA.h"
+#include "st_sync_primitives.h"
 
 using tbb::concurrent_bounded_queue;        // TODO: replace with own queue
 using ncl::bbox;
 using ncl::ssdFPGA;
-
-/**
- * @brief message struct, use between http worker and inferences worker
- * @example 
- * std::vector<bbox> predictions;
- * msg m(data,key,&predictions);
-*/
-class msg {
-public:
-    const char *data;               // the pointer that hold actual data
-    int size;                       // size of the data
-    std::vector<bbox> *predictions; // the prediction, inference engine will write the result here
-    std::string key;                // key of the message, int is enought in current system
-    msg(): data(nullptr), size(-1), predictions(nullptr), key("") {}
-    msg(const char* _data, int _size, std::vector<bbox>* _predictions, std::string _key):
-        data(_data), size(_size), predictions(_predictions), key(_key) { }
-};
+using namespace st::internal;
 
 
 /**
- * @brief This is the C++11 equivalent of a generic lambda.
- * @brief function object is used to send an HTTP message. 
+ * @brief This is the C++11 equivalent of a generic lambda. 
+ * function object is used to send an HTTP message. 
 */
 template<class Stream>
 struct send_lambda
@@ -162,10 +145,7 @@ public:
 class inference_worker : public worker {
 private:
     std::shared_ptr<ssdFPGA> Ie; ///
-    std::shared_ptr<concurrent_bounded_queue<msg>> TaskQueue; 
-    std::shared_ptr<std::condition_variable> cv;
-    std::shared_ptr<std::mutex> mtx;
-    std::shared_ptr<std::string> key;
+    object_detection_mq<single_bell::Ptr>::Ptr TaskQueue; 
 public:
     /**
      * @brief Construct a new inference worker object
@@ -181,10 +161,8 @@ public:
      * @param _mtx 
      * @param _key 
      */
-    inference_worker(std::shared_ptr<ssdFPGA> _Ie, std::shared_ptr<concurrent_bounded_queue<msg>> _TaskQueue, 
-                    std::shared_ptr<std::condition_variable> _cv, std::shared_ptr<std::mutex> _mtx, 
-                    std::shared_ptr<std::string> _key):
-                    Ie(_Ie), TaskQueue(_TaskQueue), cv(_cv), mtx(_mtx), key(_key)
+    inference_worker(std::shared_ptr<ssdFPGA>& _Ie, object_detection_mq<single_bell::Ptr>::Ptr& _TaskQueue):
+                    Ie(_Ie), TaskQueue(_TaskQueue)
                     {
                         spdlog::info("Init inference worker!");
                     }
@@ -202,19 +180,20 @@ public:
      * 
      */
     void operator()() { 
+        pthread_setname_np(pthread_self(),"IE worker");
         // start listening to the queue
         try {
             for (;;) {
-                spdlog::info("Waiting for new task");
-                msg m; //! find other way to do it
-                TaskQueue->pop(m);
-                spdlog::debug("inference worker {} attempt to accquire lock", boost::lexical_cast<std::string>(std::this_thread::get_id()));
-                std::lock_guard<std::mutex> lk(*mtx);
+                spdlog::info("[IEW] Waiting for new task");
+                 //! find other way to do it
+                auto m = TaskQueue->pop();
+                // m.bell->lock();
+                spdlog::info("[IEW] Invoke inference engine {}", TaskQueue->size());
                 *m.predictions = Ie->run(m.data, m.size);
+                spdlog::info("[IEW] Done inferencing, predidiction size = {}", m.predictions->size());
                 // Push to queue and notify the http_worker
-                *key = m.key;
-                spdlog::info("Broadcast key {}", m.key);
-                cv->notify_all();
+                spdlog::info("[IEW] signaling request thread");
+                m.bell->ring(1);
             }
         }
         catch(const std::exception& e) {
@@ -236,10 +215,8 @@ private:
     tcp::socket sock{acceptor.get_executor()};              // the endpoint socket, passed from main thread
     std::shared_ptr<ssdFPGA> Ie;                            // pointer to inference engine in case we use CPU inference
     void *data;                                             // pointer to data, i.e dashboard
-    std::shared_ptr<concurrent_bounded_queue<msg>> TaskQueue; 
-    std::shared_ptr<std::condition_variable> cv;
-    std::shared_ptr<std::mutex> mtx;
-    std::shared_ptr<std::string> key;
+    object_detection_mq<single_bell::Ptr>::Ptr TaskQueue; 
+    single_bell::Ptr bell;
 public:
     /**
      * @brief Construct a new http worker object
@@ -260,12 +237,12 @@ public:
      * @param _key 
      */
     http_worker(tcp::acceptor& _acceptor, tcp::socket&& _sock, std::shared_ptr<ssdFPGA> _Ie, void *_data, 
-                std::shared_ptr<concurrent_bounded_queue<msg>> _TaskQueue, 
-                std::shared_ptr<std::condition_variable> _cv, std::shared_ptr<std::mutex> _mtx, 
-                std::shared_ptr<std::string> _key):
-                acceptor(_acceptor), sock(std::move(_sock)), Ie(_Ie), data(_data), TaskQueue(_TaskQueue),
-                cv(_cv), mtx(_mtx), key(_key)
-                {}
+                object_detection_mq<single_bell::Ptr>::Ptr& _TaskQueue):
+                acceptor(_acceptor), sock(std::move(_sock)), Ie(_Ie), data(_data), TaskQueue(_TaskQueue)
+                {
+                    bell = std::make_shared<single_bell>();
+                    spdlog::info("Init new http worker!");
+                }
     
     /**
      * @brief 
@@ -280,6 +257,7 @@ public:
      * @return * Start 
      */
     void operator()() {
+        pthread_setname_np(pthread_self(),"http worker");
         session_handler();
     }
 private:
@@ -412,19 +390,12 @@ private:
         }
         else {
             // need to pass to inference worker
-            std::ostringstream ss;
-            ss << std::this_thread::get_id();
-            std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::system_clock::now().time_since_epoch()
-            );
-            ss << std::to_string(ms.count());
-            msg m{data,size,&prediction,ss.str()};
-            spdlog::info("Genkey {}",m.key);
+            obj_detection_msg<single_bell::Ptr> m{data,size,&prediction,bell};
+            spdlog::debug("[HTTPW {}] enqueue my task {}", boost::lexical_cast<std::string>(std::this_thread::get_id()), TaskQueue->size());
             TaskQueue->push(m);
-            spdlog::debug("http worker {} attempt to accquire lock", boost::lexical_cast<std::string>(std::this_thread::get_id()));
-            std::unique_lock<std::mutex>lk(*mtx);
-            spdlog::debug("http worker {} accquired lock", boost::lexical_cast<std::string>(std::this_thread::get_id()));
-            cv->wait(lk,[&](){return m.key == *key;});
+            spdlog::debug("[HTTPW {}] waiting for IEW", boost::lexical_cast<std::string>(std::this_thread::get_id()));
+            bell->wait(1);
+            spdlog::debug("[HTTPW {}] recieved data", boost::lexical_cast<std::string>(std::this_thread::get_id()));
         }
         int n = prediction.size();
         // create property tree and write to json
@@ -598,6 +569,7 @@ private:
         }
         // If we can reach here, the the request is successful 
         // Shut down the socket and return
+        spdlog::info("[HTTPW] Shutdown my socket!");
         sock.shutdown(tcp::socket::shutdown_send,ec);
         return;
     } // session_handler
@@ -610,10 +582,7 @@ private:
 
 class listen_worker {
 private: 
-    std::shared_ptr<tbb::concurrent_bounded_queue<msg>> TaskQueue;
-    std::shared_ptr<std::condition_variable> cv;
-    std::shared_ptr<std::mutex> mtx;
-    std::shared_ptr<std::string> key;
+    object_detection_mq<single_bell::Ptr>::Ptr TaskQueue;
     std::shared_ptr<ssdFPGA> Ie;
 
 private:
@@ -624,7 +593,6 @@ private:
      * @param p 
      */
     void listen(const char* ip, const char* p) {
-        pthread_setname_np(pthread_self(),"listen worker");
         auto const address = net::ip::make_address(ip);
         auto const port = static_cast<unsigned short>(std::stoi(p));
         // the io_contex is required to all IO - boost asio implementation
@@ -640,8 +608,7 @@ private:
             // launch new http worker to handle new request
             // transfer ownership of socket to the worker
             auto f = [&](tcp::socket& _sock){
-                pthread_setname_np(pthread_self(),"http worker");
-                http_worker httper{acceptor, std::move(_sock), Ie, nullptr,TaskQueue, cv, mtx, key};
+                http_worker httper{acceptor, std::move(_sock), Ie, nullptr,TaskQueue};
                 httper();
             };
             std::thread{
@@ -666,12 +633,9 @@ public:
      * @param _Ie 
      */
     explicit
-    listen_worker(std::shared_ptr<tbb::concurrent_bounded_queue<msg>>&_TaskQueue,
-                  std::shared_ptr<std::condition_variable>& _cv,
-                  std::shared_ptr<std::mutex>& _mtx,
-                  std::shared_ptr<std::string>& _key,
-                  std::shared_ptr<ssdFPGA> _Ie):
-                  TaskQueue(_TaskQueue), cv(_cv), mtx(_mtx), key(_key), Ie(_Ie)
+    listen_worker(object_detection_mq<single_bell::Ptr>::Ptr& _TaskQueue,
+                  std::shared_ptr<ssdFPGA>& _Ie):
+                  TaskQueue(_TaskQueue), Ie(_Ie)
                 {}
 
     /**
@@ -687,6 +651,7 @@ public:
      * 
      */
     void operator()() {
+        pthread_setname_np(pthread_self(),"listen worker");
         std::cout << "Warning: no IP and address is provide" << std::endl;
         std::cout << "Use defaul address 0.0.0.0 and default port 8080" << std:: endl;
         listen("0.0.0.0","8080");
@@ -700,6 +665,7 @@ public:
      * @param port 
      */
     void operator()(std::string& ip, std::string& port) {
+        pthread_setname_np(pthread_self(),"listen worker");
         listen(ip.c_str(),port.c_str());
     }
 

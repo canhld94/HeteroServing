@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // C include
+#ifndef _SSDFPGA_H_
+#define _SSDFPGA_H_
 #include <stdio.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -37,6 +39,9 @@
 #include <samples/slog.hpp>
 
 #include <ext_list.hpp>
+
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/basic_file_sink.h>
 
 // we use stl for most of our container 
 // just avoid so many mess std::
@@ -145,7 +150,6 @@ namespace helper {
             throw std::logic_error("This demo accepts networks having only one input");
         }
         InputInfo::Ptr& input = inputInfo.begin()->second;
-        auto inputName = inputInfo.begin()->first;
         input->setPrecision(Precision::U8);
         input->getInputData()->setLayout(Layout::NCHW);
 
@@ -156,7 +160,6 @@ namespace helper {
             throw std::logic_error("This demo accepts networks having only one output");
         }
         DataPtr& output = outputInfo.begin()->second;
-        auto outputName = outputInfo.begin()->first;
         const SizeVector outputDims = output->getTensorDesc().getDims();
         const int objectSize = outputDims[3];
         if (objectSize != 7) {
@@ -298,10 +301,11 @@ namespace ncl {
             // create new request
             InferRequest::Ptr infer_request = _exe_network.CreateInferRequestPtr();
             frameToBlob(frame, infer_request, _inputInfor.begin()->first);
-            infer_request->StartAsync();
-            if (infer_request->Wait(IInferRequest::WaitMode::RESULT_READY) == OK) {
+            infer_request->Infer();
+            // if (infer_request->Wait(IInferRequest::WaitMode::RESULT_READY) == OK) {
                 DataPtr& output = _outputInfor.begin()->second;
                 auto outputName = _outputInfor.begin()->first;
+                spdlog::debug("{}", outputName);
                 const SizeVector outputDims = output->getTensorDesc().getDims();
                 const int maxProposalCount = outputDims[2];
                 const int objectSize = outputDims[3];
@@ -331,7 +335,7 @@ namespace ncl {
                         ret.push_back(d);
                     }
                 }
-            }
+            // }
             return ret;
         }
         catch (const cv::Exception &e) {
@@ -341,3 +345,4 @@ namespace ncl {
         }
     }
 } // namespace ncl
+#endif

@@ -10,8 +10,8 @@
 #include <gflags/gflags.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
-#include <ultis.h>
-#include "workers.h"
+#include "ultis.h"
+#include "st_workers.h"
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
@@ -64,6 +64,9 @@ bool ParseAndCheckCommandLine(int argc,char *argv[]) {
     return true;
 }
 
+auto static const _____ = []() {
+    pthread_setname_np(pthread_self(),"main worker"); // just for debugging
+};
 
 int main(int argc, char const *argv[])
 {
@@ -80,7 +83,7 @@ int main(int argc, char const *argv[])
         }
         std::cout << "Loading server configuration from " << FLAGS_f << std::endl;
         if (!fs::exists(FLAGS_f)) {
-            std::cout << "WARNING: server configuration file is not provided!" << std::endl;
+            std::cout << "WARNING: server configuration file is not exist or invalid" << std::endl;
             std::cout << "using default ../server_config/config.json" << std::endl;
             FLAGS_f = "../server_config/config.json";
         }
@@ -90,7 +93,6 @@ int main(int argc, char const *argv[])
         bpt::read_json(FLAGS_f,config);
         std::cout << "Server configuration:" << std::endl;
         bpt::write_json(std::cout,config);
-        spdlog::debug("This message should be displayed..");    
         
         // parsing 
         // server
@@ -103,15 +105,12 @@ int main(int argc, char const *argv[])
         const std::string &labels = ie.get<std::string>("labels");
 
         // task queue - Not necessary used with CPU inference
-        std::shared_ptr<tbb::concurrent_bounded_queue<msg>> TaskQueue = std::make_shared<tbb::concurrent_bounded_queue<msg>>();
-        std::shared_ptr<std::condition_variable> cv = std::make_shared<std::condition_variable>();
-        std::shared_ptr<std::mutex> mtx = std::make_shared<std::mutex>();
-        std::shared_ptr<std::string> key = std::make_shared<std::string>();
+        object_detection_mq<single_bell::Ptr>::Ptr TaskQueue = std::make_shared<object_detection_mq<single_bell::Ptr>>();
 
         // inference engine init
         // TODO: make it prettier
         std::shared_ptr<ncl::ssdFPGA> Ie = std::make_shared<ncl::ssdFPGA>(device,model,labels,0);
-        listen_worker listener{TaskQueue, cv, mtx, key, Ie};
+        listen_worker listener{TaskQueue, Ie};
 
         // FPGA or not
         bool FPGA = device.find("FPGA") != std::string::npos;
@@ -120,7 +119,7 @@ int main(int argc, char const *argv[])
             // and create other thead to run listener
             listener.destroy_ie();
             std::thread{std::bind(listener,ip,port)}.detach();
-            inference_worker inferencer{Ie, TaskQueue, cv, mtx, key};
+            inference_worker inferencer{Ie, TaskQueue};
             inferencer();
         }
         else {
