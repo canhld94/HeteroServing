@@ -20,7 +20,7 @@ using ncl::bbox;
 
 
 namespace st {
-namespace internal {
+namespace sync {
     /**
      * @brief simple bell using in queue theorem
      *  
@@ -32,50 +32,52 @@ namespace internal {
      * @tparam reset_state the reset state of key
      */
 
-    template <class CondVar, class Mutex, class Key, 
-            class Lock, class LiteralKey, LiteralKey reset_state>
-    class Bell {
+    template <class Key, class LiteralKey, LiteralKey reset_state,
+              class CondVar = std::condition_variable, 
+              class Mutex = std::mutex, 
+              class Lock = std::unique_lock<std::mutex>>
+    class simple_bell {
     private:
         CondVar cv;
         Mutex mtx;
         Key key = reset_state;
     public:
         /**
-         * @brief Construct a new Bell object
+         * @brief Construct a new simple_bell object
          * 
          */
-        Bell() = default;
+        simple_bell() = default;
         /**
-         * @brief Construct a new Bell object
+         * @brief Construct a new simple_bell object
          * 
          * @param other 
          */
-        Bell(const Bell& other) = delete;
+        simple_bell(const simple_bell& other) = delete;
         /**
-         * @brief Construct a new Bell object
+         * @brief Construct a new simple_bell object
          * 
          * @param other 
          */
-        Bell(Bell&& other) = delete;
+        simple_bell(simple_bell&& other) = delete;
         /**
          * @brief 
          * 
          * @param rhs 
-         * @return Bell& 
+         * @return simple_bell& 
          */
-        Bell& operator=(const Bell& rhs) = delete; 
+        simple_bell& operator=(const simple_bell& rhs) = delete; 
         /**
          * @brief 
          * 
          * @param rhs 
-         * @return Bell& 
+         * @return simple_bell& 
          */
-        Bell& operator=(const Bell&& rhs) = delete;
+        simple_bell& operator=(const simple_bell&& rhs) = delete;
         /**
-         * @brief Destroy the Bell object
+         * @brief Destroy the simple_bell object
          * 
          */
-        ~Bell() {};
+        ~simple_bell() {};
         /**
          * @brief 
          * 
@@ -107,12 +109,12 @@ namespace internal {
             lk.unlock();
             cv.notify_one();
         }
-        using Ptr = std::shared_ptr<Bell>;
+        using ptr = std::shared_ptr<simple_bell>;
     };
     
-    using single_bell = Bell<std::condition_variable, std::mutex, int, std::unique_lock<std::mutex>,int,0>;
+    using single_bell = simple_bell<int,int,0>;
     template <const char* reset_state>
-    using shared_bell = Bell<std::condition_variable, std::mutex, std::string, std::unique_lock<std::mutex>,const char*,reset_state>;
+    using shared_bell = simple_bell<std::string,const char*,reset_state>;
     
     /**
      * @brief 
@@ -122,35 +124,36 @@ namespace internal {
      * @tparam ResponsePtr 
      * @tparam BellPtr 
      */
-    template <class DataPtr, class Ssize, class ResponsePtr, class BellPtr>
-    class msg {
+    template <class DataPtr, class Ssize, class ResponsePtr, class simple_bell>
+    class message {
+        using BellPtr = typename simple_bell::ptr;
     public:
         DataPtr data;               // the pointer that hold actual data
         Ssize size;                       // size of the data
         ResponsePtr predictions; // the prediction, inference engine will write the result here
         BellPtr bell;
         /**
-         * @brief Construct a new msg object
+         * @brief Construct a new message object
          * 
          */
-        msg(): data(nullptr), size(-1), predictions(nullptr), bell(nullptr) {}
+        message(): data(nullptr), size(-1), predictions(nullptr), bell(nullptr) {}
         /**
-         * @brief Construct a new msg object
+         * @brief Construct a new message object
          * 
          * @param _data 
          * @param _size 
          * @param _predictions 
          * @param _bell 
          */
-        msg(DataPtr& _data, Ssize& _size, ResponsePtr _predictions, BellPtr& _bell):
+        message(DataPtr& _data, Ssize& _size, ResponsePtr _predictions, BellPtr& _bell):
             data(_data), size(_size), predictions(_predictions), bell(_bell) {}
         /**
          * @brief 
          * 
          * @param rhs 
-         * @return msg& 
+         * @return message& 
          */
-        msg& operator=(const msg& rhs) {
+        message& operator=(const message& rhs) {
             if (this != &rhs) {
                 data = rhs.data;
                 size = rhs.size;
@@ -160,20 +163,20 @@ namespace internal {
             return *this;
         }
         /**
-         * @brief Construct a new msg object
+         * @brief Construct a new message object
          * 
          * @param other 
          */
-        msg(const msg& other) {
+        message(const message& other) {
             *this = other;
         }
         /**
          * @brief 
          * 
          * @param rhs 
-         * @return msg& 
+         * @return message& 
          */
-        msg& operator=(const msg&& rhs) {
+        message& operator=(const message&& rhs) {
             if (this != rhs) {
                 this = rhs;
                 rhs.data = nullptr;
@@ -183,28 +186,28 @@ namespace internal {
             }
         }
         /**
-         * @brief Construct a new msg object
+         * @brief Construct a new message object
          * 
          * @param other 
          */
-        msg(const msg&& other) {
+        message(const message&& other) {
             *this = other;
         }
     };
     /**
      * @brief 
      * 
-     * @tparam BellPtr 
+     * @tparam simple_bell 
      */
-    template <class BellPtr>
-    using obj_detection_msg = msg<const char*, int, std::vector<bbox>*, BellPtr>;
+    template <class simple_bell>
+    using obj_detection_msg = message<const char*, int, std::vector<bbox>*, simple_bell>;
     /**
      * @brief 
      * 
-     * @tparam BellPtr 
+     * @tparam simple_bell 
      */
-    template <class BellPtr>
-    using classification_msg =  msg<const char*, int, int*, BellPtr>;
+    template <class simple_bell>
+    using classification_msg =  message<const char*, int, int*, simple_bell>;
 
     /**
      * @brief 
@@ -215,8 +218,11 @@ namespace internal {
      * @tparam Mutex 
      * @tparam Lock 
      */
-    template <class Message, class DeQue, class CondVar, class Mutex, class Lock>
-    class BlockingQueue {
+    template <class Message, class DeQue = std::deque<Message>, 
+              class CondVar = std::condition_variable, 
+              class Mutex = std::mutex, 
+              class Lock = std::unique_lock<std::mutex>>
+    class blocking_queue {
     private:
         DeQue queue;
         CondVar cv;
@@ -256,21 +262,21 @@ namespace internal {
             Lock lk{mtx};
             return queue.size();
         }
-        using Ptr = std::shared_ptr<BlockingQueue>;
+        using ptr = std::shared_ptr<blocking_queue>;
     };
     /**
      * @brief 
      * 
-     * @tparam BellPtr 
+     * @tparam simple_bell 
      */
-    template <class BellPtr>
-    using object_detection_mq = BlockingQueue<obj_detection_msg<BellPtr>,std::deque<obj_detection_msg<BellPtr> >, std::condition_variable, std::mutex,std::unique_lock<std::mutex> >;
+    template <class simple_bell>
+    using object_detection_mq = blocking_queue<obj_detection_msg<simple_bell>>;
     /**
      * @brief 
      * 
-     * @tparam BellPtr 
+     * @tparam simple_bell 
      */
-    template <class BellPtr>
-    using classification_mq = BlockingQueue<classification_msg<BellPtr>,std::deque<obj_detection_msg<BellPtr> >, std::condition_variable, std::mutex,std::unique_lock<std::mutex> >;
+    template <class simple_bell>
+    using classification_mq = blocking_queue<classification_msg<simple_bell>>;
     }
 }

@@ -105,7 +105,7 @@ int main(int argc, char const *argv[])
         const std::string &labels = ie.get<std::string>("labels");
 
         // task queue - Not necessary used with CPU inference
-        object_detection_mq<single_bell::Ptr>::Ptr TaskQueue = std::make_shared<object_detection_mq<single_bell::Ptr>>();
+        object_detection_mq<single_bell>::ptr TaskQueue = std::make_shared<object_detection_mq<single_bell>>();
 
         // inference engine init
         // TODO: make it prettier

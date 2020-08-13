@@ -43,6 +43,8 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
 
+#include "ultis.h"
+
 // we use stl for most of our container 
 // just avoid so many mess std::
 using std::cout;
@@ -262,15 +264,22 @@ namespace ncl {
         // TODO: discover and lock FPGA card, reprogramming the device and ready to launch
         try
         {
-            cout << "Init FPGA Plugin" << endl;
+            // InferenceEngine::ExecutableNetwork aux_exe_network;
+            PROFILE_RELEASE("Init Pulgin",
             init_plugin(_device,_plugin);
-            cout << "Loading FPGA Network" << endl;
+            );
+            PROFILE_RELEASE("Load Network",
             load_network(_xml,_l,_labels,_network);
-            cout << "Init FPGA IO" << endl;
+            )
+            PROFILE_RELEASE("Init IO Blob",
             init_IO(_network,_inputInfor,_outputInfor);
-            cout << "Loading FPGA Plugin" << endl;
-            load_plugin(_plugin,_network,_exe_network);
-            cout << "Load FPGA Plugin successful" << endl;
+            )
+            PROFILE_RELEASE("Create Excutable Network",
+            load_plugin(_plugin,_network,_exe_network);            
+            )
+            // PROFILE_RELEASE("Create Auxialry Excutable Network",
+            // load_plugin(_plugin,_network,aux_exe_network);            
+            // )
         }
         catch(const std::exception& e)
         {
@@ -295,47 +304,52 @@ namespace ncl {
         vector<bbox> ret; // return value
         try {
             // decode out image
+            PROFILE_RELEASE("Decode Image and Prepare Blobs",
             cv::Mat frame = cv::imdecode(cv::Mat(1,size,CV_8UC3, (unsigned char*) data),cv::IMREAD_UNCHANGED);
             const int width = frame.size().width;
             const int height = frame.size().height;
+            )
+
+            PROFILE_RELEASE("Do Inference",
             // create new request
             InferRequest::Ptr infer_request = _exe_network.CreateInferRequestPtr();
             frameToBlob(frame, infer_request, _inputInfor.begin()->first);
             infer_request->Infer();
-            // if (infer_request->Wait(IInferRequest::WaitMode::RESULT_READY) == OK) {
-                DataPtr& output = _outputInfor.begin()->second;
-                auto outputName = _outputInfor.begin()->first;
-                spdlog::debug("{}", outputName);
-                const SizeVector outputDims = output->getTensorDesc().getDims();
-                const int maxProposalCount = outputDims[2];
-                const int objectSize = outputDims[3];
-                const float *detections = infer_request->GetBlob(outputName)->buffer().as<PrecisionTrait<Precision::FP32>::value_type*>();
-                for (int i = 0; i < maxProposalCount; i++) {
-                    float image_id = detections[i * objectSize + 0];
-                    if (image_id < 0) {
-                        break;
-                    }
-                    float confidence = detections[i * objectSize + 2];
-                    auto label_id = static_cast<int>(detections[i * objectSize + 1]);
-                    int xmin = detections[i * objectSize + 3] * width;
-                    int ymin = detections[i * objectSize + 4] * height;
-                    int xmax = detections[i * objectSize + 5] * width;
-                    int ymax = detections[i * objectSize + 6] * height;
-                    auto label = _labels[label_id-1];
+            )
 
-                    if (confidence > 0.45) {
-                        bbox d;
-                        d.prop = confidence;
-                        d.label_id = label_id;
-                        d.label = label;
-                        d.c[0] = xmin;
-                        d.c[1] = ymin;
-                        d.c[2] = xmax;
-                        d.c[3] = ymax;
-                        ret.push_back(d);
-                    }
+            PROFILE_RELEASE("Processing Network Output",
+            DataPtr& output = _outputInfor.begin()->second;
+            auto outputName = _outputInfor.begin()->first;
+            const SizeVector outputDims = output->getTensorDesc().getDims();
+            const int maxProposalCount = outputDims[2];
+            const int objectSize = outputDims[3];
+            const float *detections = infer_request->GetBlob(outputName)->buffer().as<PrecisionTrait<Precision::FP32>::value_type*>();
+            for (int i = 0; i < maxProposalCount; i++) {
+                float image_id = detections[i * objectSize + 0];
+                if (image_id < 0) {
+                    break;
                 }
-            // }
+                float confidence = detections[i * objectSize + 2];
+                auto label_id = static_cast<int>(detections[i * objectSize + 1]);
+                int xmin = detections[i * objectSize + 3] * width;
+                int ymin = detections[i * objectSize + 4] * height;
+                int xmax = detections[i * objectSize + 5] * width;
+                int ymax = detections[i * objectSize + 6] * height;
+                auto label = _labels[label_id-1];
+
+                if (confidence > 0.45) {
+                    bbox d;
+                    d.prop = confidence;
+                    d.label_id = label_id;
+                    d.label = label;
+                    d.c[0] = xmin;
+                    d.c[1] = ymin;
+                    d.c[2] = xmax;
+                    d.c[3] = ymax;
+                    ret.push_back(d);
+                }
+            }
+            )
             return ret;
         }
         catch (const cv::Exception &e) {

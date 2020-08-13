@@ -43,7 +43,7 @@ using std::ofstream;
 using tbb::concurrent_bounded_queue;        // TODO: replace with own queue
 using ncl::bbox;
 using ncl::ssdFPGA;
-using namespace st::internal;
+using namespace st::sync;
 
 
 /**
@@ -145,7 +145,7 @@ public:
 class inference_worker : public worker {
 private:
     std::shared_ptr<ssdFPGA> Ie; ///
-    object_detection_mq<single_bell::Ptr>::Ptr TaskQueue; 
+    object_detection_mq<single_bell>::ptr TaskQueue; 
 public:
     /**
      * @brief Construct a new inference worker object
@@ -161,7 +161,7 @@ public:
      * @param _mtx 
      * @param _key 
      */
-    inference_worker(std::shared_ptr<ssdFPGA>& _Ie, object_detection_mq<single_bell::Ptr>::Ptr& _TaskQueue):
+    inference_worker(std::shared_ptr<ssdFPGA>& _Ie, object_detection_mq<single_bell>::ptr& _TaskQueue):
                     Ie(_Ie), TaskQueue(_TaskQueue)
                     {
                         spdlog::info("Init inference worker!");
@@ -215,8 +215,8 @@ private:
     tcp::socket sock{acceptor.get_executor()};              // the endpoint socket, passed from main thread
     std::shared_ptr<ssdFPGA> Ie;                            // pointer to inference engine in case we use CPU inference
     void *data;                                             // pointer to data, i.e dashboard
-    object_detection_mq<single_bell::Ptr>::Ptr TaskQueue; 
-    single_bell::Ptr bell;
+    object_detection_mq<single_bell>::ptr TaskQueue; 
+    single_bell::ptr bell;
 public:
     /**
      * @brief Construct a new http worker object
@@ -237,7 +237,7 @@ public:
      * @param _key 
      */
     http_worker(tcp::acceptor& _acceptor, tcp::socket&& _sock, std::shared_ptr<ssdFPGA> _Ie, void *_data, 
-                object_detection_mq<single_bell::Ptr>::Ptr& _TaskQueue):
+                object_detection_mq<single_bell>::ptr& _TaskQueue):
                 acceptor(_acceptor), sock(std::move(_sock)), Ie(_Ie), data(_data), TaskQueue(_TaskQueue)
                 {
                     bell = std::make_shared<single_bell>();
@@ -390,7 +390,7 @@ private:
         }
         else {
             // need to pass to inference worker
-            obj_detection_msg<single_bell::Ptr> m{data,size,&prediction,bell};
+            obj_detection_msg<single_bell> m{data,size,&prediction,bell};
             spdlog::debug("[HTTPW {}] enqueue my task {}", boost::lexical_cast<std::string>(std::this_thread::get_id()), TaskQueue->size());
             TaskQueue->push(m);
             spdlog::debug("[HTTPW {}] waiting for IEW", boost::lexical_cast<std::string>(std::this_thread::get_id()));
@@ -547,8 +547,10 @@ private:
 
         for (;;) {
             // read from socket
-            http::request<http::string_body> req;
-            http::read(sock, buffer, req, ec);
+            PROFILE_DEBUG("Read From Socket",
+                http::request<http::string_body> req;
+                http::read(sock, buffer, req, ec);
+            );
             // if read indicates end of stream, stop reading
             if (ec == http::error::end_of_stream) {
                 break;
@@ -558,7 +560,9 @@ private:
                 return fail(ec,"read");
             }
             // handle request
-            request_handler(std::move(req),sender);
+            PROFILE_DEBUG("Handle Request",
+                request_handler(std::move(req),sender);
+            );
             // handler write error report by sender
             if (ec) {
                 return fail(ec,"write");
@@ -582,7 +586,7 @@ private:
 
 class listen_worker {
 private: 
-    object_detection_mq<single_bell::Ptr>::Ptr TaskQueue;
+    object_detection_mq<single_bell>::ptr TaskQueue;
     std::shared_ptr<ssdFPGA> Ie;
 
 private:
@@ -633,7 +637,7 @@ public:
      * @param _Ie 
      */
     explicit
-    listen_worker(object_detection_mq<single_bell::Ptr>::Ptr& _TaskQueue,
+    listen_worker(object_detection_mq<single_bell>::ptr& _TaskQueue,
                   std::shared_ptr<ssdFPGA>& _Ie):
                   TaskQueue(_TaskQueue), Ie(_Ie)
                 {}
