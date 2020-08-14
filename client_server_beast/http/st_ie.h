@@ -1,71 +1,124 @@
 
-/*
-    Generic inference engine interface
-*/
-class inference_engine {
+#include <stdio.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <errno.h>
+// C++
+#include <gflags/gflags.h>
+#include <functional>
+#include <iostream>
+#include <fstream>
+#include <random>
+#include <memory>
+#include <chrono>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <iterator>
+#include <mutex>
 
-};
+#include <memory>
+#include <thread>
+#include <csignal>
 
-/*
-    Generic object detection interface
-*/
+#include <inference_engine.hpp>
 
-class object_detection {
+#include <samples/ocv_common.hpp>
+#include <samples/slog.hpp>
 
-};
+#include <ext_list.hpp>
 
-/*
-    SSD inferencer
-*/
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/basic_file_sink.h>
 
-class ssd : public object_detection {
+namespace st {
+namespace ie {
 
-};
+    class inference_engine {
+    private:
+        vector<string> labels;                                 // path to labels file
+        InferenceEngine::InferencePlugin plugin;               // OpenVino inference plugin
+        InferenceEngine::CNNNetwork network;                   // The logical CNN network
+        InferenceEngine::ExecutableNetwork exe_network;        // The actual object which will excute the request
+        InferenceEngine::InputsDataMap inputblob;
+        InferenceEngine::OutputsDataMap outputblob;
+    public:
+        inference_engine() {};
+        inference_engine(std::string& model, std::string& device, std::string& label) {
 
-/*
-    Yolo inferencer
-*/
+        };
+        inference_engine(inference_engine& ) 
+    };
 
-class yolo : public object_detection {
+    /*
+        Generic object detection interface
+    */
 
-};
+    class object_detection {
 
-/*
-    Fast r cnn inferencer
-*/
+    };
 
-class fast_r_cnn : public object_detection {
+    /*
+        SSD inferencer
+    */
 
-};
+    class ssd : public object_detection {
 
-/*
-    classification generic interface
-*/
+    };
 
-class classification : public inference_engine {
+    /*
+        Yolo inferencer
+    */
 
-};
+    class yolo : public object_detection {
 
-/*
-    Resnet inferencer
-*/
+    };
 
-class resnet101 : public classification {
+    /*
+        Fast r cnn inferencer
+    */
 
-};
+    class fast_r_cnn : public object_detection {
 
-/*
-    Segmentation generic interface
-*/
+    };
 
-class segmentation : public inference_engine {
-    
-};
+    /*
+        classification generic interface
+    */
 
-/*
-    MaskRCNN inferencer
-*/
+    class classification : public inference_engine {
 
-class mask_r_cnn :  public segmentation {
+    };
 
-};
+    /*
+        Resnet inferencer
+    */
+
+    class resnet101 : public classification {
+
+    };
+
+    /*
+        Segmentation generic interface
+    */
+
+    class segmentation : public inference_engine {
+        
+    };
+
+    /*
+        MaskRCNN inferencer
+    */
+
+    class mask_r_cnn :  public segmentation {
+
+    };
+}
+}
