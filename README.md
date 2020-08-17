@@ -46,6 +46,13 @@ demo_apps/
 
 What have been done and what to learn up to
 
+## ---- 2020 / 08 / 17 ----
+
+- __Road map__:
+
+  - Implement generic inference engine that support other type of model _important_
+  - Implement generic http server that can run with other type of inference engine
+
 ## ---- 2020 / 08 / 12 ----
 
 - Fix the deadlock problem, it's likely a system error when we shutdown the FPGA server incorrectly
