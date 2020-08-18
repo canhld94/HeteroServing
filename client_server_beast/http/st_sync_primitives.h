@@ -13,9 +13,9 @@
 #include <mutex>
 #include <condition_variable>
 #include <tbb/concurrent_queue.h>   // Intel tbb concurent queue
-#include "ssdFPGA.h"                // from ncl
+#include "st_ie.h"
 
-using ncl::bbox;
+using st::ie::bbox;
 
 
 
@@ -207,7 +207,7 @@ namespace sync {
      * @tparam simple_bell 
      */
     template <class simple_bell>
-    using classification_msg =  message<const char*, int, int*, simple_bell>;
+    using classification_msg =  message<const char*, int, std::vector<int>*, simple_bell>;
 
     /**
      * @brief 

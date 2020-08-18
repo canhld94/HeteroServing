@@ -37,12 +37,11 @@ using std::endl;
 using std::ofstream;
 
 #include "ultis.h"
-#include "ssdFPGA.h"
+#include "st_ie.h"
 #include "st_sync_primitives.h"
 
 using tbb::concurrent_bounded_queue;        // TODO: replace with own queue
-using ncl::bbox;
-using ncl::ssdFPGA;
+using st::ie::bbox;
 using namespace st::sync;
 
 
@@ -141,10 +140,10 @@ public:
  * 
  * @exception 
  */
-
+template <class IEPtr>
 class inference_worker : public worker {
 private:
-    std::shared_ptr<ssdFPGA> Ie; ///
+    IEPtr Ie; ///
     object_detection_mq<single_bell>::ptr TaskQueue; 
 public:
     /**
@@ -161,7 +160,7 @@ public:
      * @param _mtx 
      * @param _key 
      */
-    inference_worker(std::shared_ptr<ssdFPGA>& _Ie, object_detection_mq<single_bell>::ptr& _TaskQueue):
+    inference_worker(IEPtr& _Ie, object_detection_mq<single_bell>::ptr& _TaskQueue):
                     Ie(_Ie), TaskQueue(_TaskQueue)
                     {
                         spdlog::info("Init inference worker!");
@@ -209,11 +208,12 @@ public:
  * it will create a newthread that run http worker class
  * 
  */
+template<class IEPtr>
 class http_worker : public worker {
 private:
     tcp::acceptor& acceptor;                                // the acceptor, needed to init our socket
     tcp::socket sock{acceptor.get_executor()};              // the endpoint socket, passed from main thread
-    std::shared_ptr<ssdFPGA> Ie;                            // pointer to inference engine in case we use CPU inference
+    IEPtr Ie;                            // pointer to inference engine in case we use CPU inference
     void *data;                                             // pointer to data, i.e dashboard
     object_detection_mq<single_bell>::ptr TaskQueue; 
     single_bell::ptr bell;
@@ -236,7 +236,7 @@ public:
      * @param _mtx 
      * @param _key 
      */
-    http_worker(tcp::acceptor& _acceptor, tcp::socket&& _sock, std::shared_ptr<ssdFPGA> _Ie, void *_data, 
+    http_worker(tcp::acceptor& _acceptor, tcp::socket&& _sock, IEPtr _Ie, void *_data, 
                 object_detection_mq<single_bell>::ptr& _TaskQueue):
                 acceptor(_acceptor), sock(std::move(_sock)), Ie(_Ie), data(_data), TaskQueue(_TaskQueue)
                 {
@@ -583,11 +583,11 @@ private:
  * @brief listening worker that will listen to connection
  * 
  */
-
+template<class IEPtr>
 class listen_worker {
 private: 
     object_detection_mq<single_bell>::ptr TaskQueue;
-    std::shared_ptr<ssdFPGA> Ie;
+    IEPtr Ie;
 
 private:
     /**
@@ -612,7 +612,7 @@ private:
             // launch new http worker to handle new request
             // transfer ownership of socket to the worker
             auto f = [&](tcp::socket& _sock){
-                http_worker httper{acceptor, std::move(_sock), Ie, nullptr,TaskQueue};
+                http_worker<IEPtr> httper{acceptor, std::move(_sock), Ie, nullptr,TaskQueue};
                 httper();
             };
             std::thread{
@@ -638,7 +638,7 @@ public:
      */
     explicit
     listen_worker(object_detection_mq<single_bell>::ptr& _TaskQueue,
-                  std::shared_ptr<ssdFPGA>& _Ie):
+                  IEPtr& _Ie):
                   TaskQueue(_TaskQueue), Ie(_Ie)
                 {}
 

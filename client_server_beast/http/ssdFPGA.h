@@ -141,37 +141,35 @@ namespace helper {
     }
 
 
-    void init_IO(CNNNetwork &network,
-                InputsDataMap &inputInfo,
-                OutputsDataMap &outputInfo) {
+    void init_IO(CNNNetwork &network) {
 
         // Input Blob
 
-        inputInfo = InputsDataMap(network.getInputsInfo());
+        auto inputInfo = InputsDataMap(network.getInputsInfo());
         if (inputInfo.size() != 1) {
             throw std::logic_error("This demo accepts networks having only one input");
         }
         InputInfo::Ptr& input = inputInfo.begin()->second;
         input->setPrecision(Precision::U8);
-        input->getInputData()->setLayout(Layout::NCHW);
+        // input->getInputData()->setLayout(Layout::NCHW);
 
         // Output Blob
 
-        outputInfo = OutputsDataMap(network.getOutputsInfo());
-        if (outputInfo.size() != 1) {
-            throw std::logic_error("This demo accepts networks having only one output");
-        }
-        DataPtr& output = outputInfo.begin()->second;
-        const SizeVector outputDims = output->getTensorDesc().getDims();
-        const int objectSize = outputDims[3];
-        if (objectSize != 7) {
-            throw std::logic_error("Output should have 7 as a last dimension");
-        }
-        if (outputDims.size() != 4) {
-            throw std::logic_error("Incorrect output dimensions for SSD");
-        }
-        output->setPrecision(Precision::FP32);
-        output->setLayout(Layout::NCHW);
+        // auto outputInfo = OutputsDataMap(network.getOutputsInfo());
+        // if (outputInfo.size() != 1) {
+        //     throw std::logic_error("This demo accepts networks having only one output");
+        // }
+        // DataPtr& output = outputInfo.begin()->second;
+        // const SizeVector outputDims = output->getTensorDesc().getDims();
+        // const int objectSize = outputDims[3];
+        // if (objectSize != 7) {
+        //     throw std::logic_error("Output should have 7 as a last dimension");
+        // }
+        // if (outputDims.size() != 4) {
+        //     throw std::logic_error("Incorrect output dimensions for SSD");
+        // }
+        // output->setPrecision(Precision::FP32);
+        // output->setLayout(Layout::NCHW);
     }
 
     void load_plugin(InferencePlugin& plugin,
@@ -230,8 +228,8 @@ namespace ncl {
         InferenceEngine::InferencePlugin _plugin;               // OpenVino inference plugin
         InferenceEngine::CNNNetwork _network;                   // The logical CNN network
         InferenceEngine::ExecutableNetwork _exe_network;        // The actual object which will excute the request
-        InferenceEngine::InputsDataMap _inputInfor;
-        InferenceEngine::OutputsDataMap _outputInfor;
+        // InferenceEngine::InputsDataMap _inputInfor;
+        // InferenceEngine::OutputsDataMap _outputInfor;
     public:
         // !deprecated
         // lock with std::lock_guard<std::mutex> lock(m);
@@ -272,7 +270,7 @@ namespace ncl {
             load_network(_xml,_l,_labels,_network);
             )
             PROFILE_RELEASE("Init IO Blob",
-            init_IO(_network,_inputInfor,_outputInfor);
+            init_IO(_network);
             )
             PROFILE_RELEASE("Create Excutable Network",
             load_plugin(_plugin,_network,_exe_network);            
@@ -313,13 +311,17 @@ namespace ncl {
             PROFILE_RELEASE("Do Inference",
             // create new request
             InferRequest::Ptr infer_request = _exe_network.CreateInferRequestPtr();
-            frameToBlob(frame, infer_request, _inputInfor.begin()->first);
+            auto inputInfor = _exe_network.GetInputsInfo();
+            std::cout << inputInfor.begin()->first << std::endl;
+            auto outputInfor = _exe_network.GetOutputsInfo();
+            std::cout << outputInfor.begin()->first << std::endl;
+            frameToBlob(frame, infer_request, inputInfor.begin()->first);
             infer_request->Infer();
             )
 
             PROFILE_RELEASE("Processing Network Output",
-            DataPtr& output = _outputInfor.begin()->second;
-            auto outputName = _outputInfor.begin()->first;
+            CDataPtr &output = outputInfor.begin()->second;
+            auto outputName = outputInfor.begin()->first;
             const SizeVector outputDims = output->getTensorDesc().getDims();
             const int maxProposalCount = outputDims[2];
             const int objectSize = outputDims[3];

@@ -12,13 +12,14 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include "ultis.h"
 #include "st_workers.h"
+#include "st_ie.h"
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
 namespace bpt = boost::property_tree;   // from <boots/property_tree>
 namespace fs = boost::filesystem;       // from <boots/filesystem>
 typedef bpt::ptree JSON;                // just hiding the ugly name
-
+using namespace st;
 
 /// @brief message for help argument
 constexpr char help_message[] = "Print this message.";
@@ -109,8 +110,8 @@ int main(int argc, char const *argv[])
 
         // inference engine init
         // TODO: make it prettier
-        std::shared_ptr<ncl::ssdFPGA> Ie = std::make_shared<ncl::ssdFPGA>(device,model,labels,0);
-        listen_worker listener{TaskQueue, Ie};
+        ie::ssd::ptr Ie = std::make_shared<ie::ssd>(device,model,labels);
+        listen_worker<ie::ssd::ptr> listener{TaskQueue, Ie};
 
         // FPGA or not
         bool FPGA = device.find("FPGA") != std::string::npos;
@@ -119,7 +120,7 @@ int main(int argc, char const *argv[])
             // and create other thead to run listener
             listener.destroy_ie();
             std::thread{std::bind(listener,ip,port)}.detach();
-            inference_worker inferencer{Ie, TaskQueue};
+            inference_worker<ie::ssd::ptr> inferencer{Ie, TaskQueue};
             inferencer();
         }
         else {
