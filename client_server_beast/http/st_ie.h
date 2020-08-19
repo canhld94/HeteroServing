@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <iterator>
 #include <mutex>
+#include <utility>
 
 #include <memory>
 #include <thread>
@@ -48,7 +49,7 @@ namespace ie {
      */
     struct bbox {
         int label_id;       //!< label id
-        std::string label;       //!< class name
+        std::string label;  //!< class name
         float prop;         //!< confidence score
         int c[4];           //!< coordinates of bounding box
     };
@@ -92,7 +93,8 @@ namespace ie {
          */
         std::vector<std::string> labels;
         /**
-         * @brief 
+         * @brief Inference engine is the most important components in the system, so it will have
+         * a dedicated log
          * 
          */
         std::shared_ptr<spdlog::logger> log;
@@ -152,6 +154,7 @@ namespace ie {
             auto inputInfo = InputsDataMap(network.getInputsInfo());
             InputInfo::Ptr& input = inputInfo.begin()->second;
             input->setPrecision(p);
+            input->getInputData()->setLayout(Layout::NCHW);
         }
         /**
          * @brief Create an executable network from the logical netowrk
@@ -176,11 +179,21 @@ namespace ie {
             log->info("Creating new executable network in {} ms",elapsed_mil.count());
         }
         /**
-         * @brief Get the labels object
+         * @brief 
+         * 
+         */
+        virtual void IO_sanity_check () {
+            auto inputInfo = exe_network.GetInputsInfo();
+            if (inputInfo.size() != 1) {
+                throw std::logic_error("Current version of IE accepts networks having only one input");
+            }
+        }
+        /**
+         * @brief set the labels object
          * 
          * @param label 
          */
-        void get_labels(const std::string& label) {
+        void set_labels(const std::string& label) {
             std::ifstream inputFile(label);
             std::copy(std::istream_iterator<std::string>(inputFile),
             std::istream_iterator<std::string>(),
@@ -201,7 +214,16 @@ namespace ie {
             load_network(model);
             init_IO(Precision::U8);
             load_plugin({});
-            get_labels(label);         
+            set_labels(label);         
+        }
+        /**
+         * @brief Get the layer object
+         * 
+         * @param name 
+         * @return CNNLayerPtr 
+         */
+        CNNLayerPtr get_layer(const char* name) {
+            return network.getLayerByName(name);
         }
         using ptr = std::shared_ptr<inference_engine>;
     };
@@ -211,24 +233,7 @@ namespace ie {
      * 
      */
     class object_detection : public inference_engine {
-            public:
-            using inference_engine::inference_engine;
-            /**
-             * @brief Run detection
-             * @details This funtion is virtual and must be overrided in each detector 
-             * @return std::vector<bbox> 
-             */
-            virtual std::vector<bbox> run(const char* data, int size) {
-                return {};
-            }
-            using ptr = std::shared_ptr<object_detection>;
-    };
-    /**
-     * @brief 
-     * 
-     */
-    class ssd : public object_detection {
-    private:
+    protected:
         void frameToBlob(const cv::Mat& frame,
                     InferRequest::Ptr& inferRequest,
                     const std::string& inputName) {
@@ -236,7 +241,23 @@ namespace ie {
             Blob::Ptr frameBlob = inferRequest->GetBlob(inputName);
             matU8ToBlob<uint8_t>(frame, frameBlob);
         }
-
+    public:
+        using inference_engine::inference_engine;
+        /**
+         * @brief Run detection
+         * @details This funtion is virtual and must be overrided in each detector 
+         * @return std::vector<bbox> 
+         */
+        virtual std::vector<bbox> run(const char* data, int size) {
+            return {};
+        }
+        using ptr = std::shared_ptr<object_detection>;
+    };
+    /**
+     * @brief 
+     * 
+     */
+    class ssd : public object_detection {
     public:
         using object_detection::object_detection;
         /**
@@ -244,9 +265,36 @@ namespace ie {
          * 
          * @param precision 
          */
-        // void init_IO(std::string& precision) override {
+        void IO_sanity_check() override {
+            // Input Blob
+            auto inputInfo = exe_network.GetInputsInfo();
+            if (inputInfo.size() != 1) {
+                throw std::logic_error("Current version of IE accepts networks having only one input");
+            }
 
-        // }
+            // Output Blob
+
+            auto outputInfo = exe_network.GetOutputsInfo();
+            if (outputInfo.size() != 1) {
+                throw std::logic_error("Current version of IE accepts networks having only one output");
+            }
+            CDataPtr& output = outputInfo.begin()->second;
+            const SizeVector outputDims = output->getTensorDesc().getDims();
+            const int objectSize = outputDims[3];
+            if (objectSize != 7) {
+                throw std::logic_error("SSD should have 7 as a last dimension");
+            }
+            if (outputDims.size() != 4) {
+                throw std::logic_error("Incorrect output dimensions for SSD");
+            }
+        }
+        /**
+         * @brief 
+         * 
+         * @param data 
+         * @param size 
+         * @return std::vector<bbox> 
+         */
         std::vector<bbox> run(const char* data, int size) override {
             std::vector<bbox> ret; // return value
             try {
@@ -258,11 +306,13 @@ namespace ie {
                 // create new request
                 InferRequest::Ptr infer_request = exe_network.CreateInferRequestPtr();
                 auto inputInfor = exe_network.GetInputsInfo();
-                std::cout << inputInfor.begin()->first << std::endl;
                 auto outputInfor = exe_network.GetOutputsInfo();
-                std::cout << outputInfor.begin()->first << std::endl;
                 frameToBlob(frame, infer_request, inputInfor.begin()->first);
+                
+                // do inference
                 infer_request->Infer();
+                
+                // process ssd output
                 CDataPtr &output = outputInfor.begin()->second;
                 auto outputName = outputInfor.begin()->first;
                 const SizeVector outputDims = output->getTensorDesc().getDims();
@@ -303,15 +353,212 @@ namespace ie {
             }
         }
 
-        using ptr = std::shared_ptr<object_detection>;
+        using ptr = std::shared_ptr<ssd>;
     };
-
-    /*
-        Yolo inferencer
-    */
-
+    
+    /**
+     * @brief 
+     * 
+     */
     class yolo : public object_detection {
+    private:
+        /**
+         * @brief Yolo detection object 
+         * 
+         */
+        struct DetectionObject {
+            int xmin, ymin, xmax, ymax, class_id;
+            float confidence;
 
+            DetectionObject(double x, double y, double h, double w, int class_id, float confidence, float h_scale, float w_scale) {
+                this->xmin = static_cast<int>((x - w / 2) * w_scale);
+                this->ymin = static_cast<int>((y - h / 2) * h_scale);
+                this->xmax = static_cast<int>(this->xmin + w * w_scale);
+                this->ymax = static_cast<int>(this->ymin + h * h_scale);
+                this->class_id = class_id;
+                this->confidence = confidence;
+            }
+
+            bool operator <(const DetectionObject &s2) const {
+                return this->confidence < s2.confidence;
+            }
+            bool operator >(const DetectionObject &s2) const {
+                return this->confidence > s2.confidence;
+            }
+        };
+        /**
+         * @brief 
+         * 
+         * @param side 
+         * @param lcoords 
+         * @param lclasses 
+         * @param location 
+         * @param entry 
+         * @return int 
+         */
+        static int EntryIndex(int side, int lcoords, int lclasses, int location, int entry) {
+            int n = location / (side * side);
+            int loc = location % (side * side);
+            return n * side * side * (lcoords + lclasses + 1) + entry * side * side + loc;
+        }
+        double IntersectionOverUnion(const DetectionObject &box_1, const DetectionObject &box_2) {
+            double width_of_overlap_area = fmin(box_1.xmax, box_2.xmax) - fmax(box_1.xmin, box_2.xmin);
+            double height_of_overlap_area = fmin(box_1.ymax, box_2.ymax) - fmax(box_1.ymin, box_2.ymin);
+            double area_of_overlap;
+            if (width_of_overlap_area < 0 || height_of_overlap_area < 0)
+                area_of_overlap = 0;
+            else
+                area_of_overlap = width_of_overlap_area * height_of_overlap_area;
+            double box_1_area = (box_1.ymax - box_1.ymin)  * (box_1.xmax - box_1.xmin);
+            double box_2_area = (box_2.ymax - box_2.ymin)  * (box_2.xmax - box_2.xmin);
+            double area_of_union = box_1_area + box_2_area - area_of_overlap;
+            return area_of_overlap / area_of_union;
+        }
+
+        void ParseYOLOV3Output(const CNNLayerPtr &layer, const Blob::Ptr &blob, const unsigned long resized_im_h,
+                            const unsigned long resized_im_w, const unsigned long original_im_h,
+                            const unsigned long original_im_w,
+                            const double threshold, std::vector<DetectionObject> &objects) {
+            // --------------------------- Validating output parameters -------------------------------------
+            if (layer->type != "RegionYolo")
+                throw std::runtime_error("Invalid output type: " + layer->type + ". RegionYolo expected");
+            const int out_blob_h = static_cast<int>(blob->getTensorDesc().getDims()[2]);
+            const int out_blob_w = static_cast<int>(blob->getTensorDesc().getDims()[3]);
+            if (out_blob_h != out_blob_w)
+                throw std::runtime_error("Invalid size of output " + layer->name +
+                " It should be in NCHW layout and H should be equal to W. Current H = " + std::to_string(out_blob_h) +
+                ", current W = " + std::to_string(out_blob_h));
+            // --------------------------- Extracting layer parameters -------------------------------------
+            auto num = layer->GetParamAsInt("num");
+            try { num = layer->GetParamAsInts("mask").size(); } catch (...) {}
+            auto coords = layer->GetParamAsInt("coords");
+            auto classes = layer->GetParamAsInt("classes");
+            std::vector<float> anchors = {10.0, 13.0, 16.0, 30.0, 33.0, 23.0, 30.0, 61.0, 62.0, 45.0, 59.0, 119.0, 116.0, 90.0,
+                                        156.0, 198.0, 373.0, 326.0};
+            // std::vector<float> anchors = {10, 14, 23, 27, 37, 58, 81, 82, 135, 169, 344, 319};
+            
+            try { anchors = layer->GetParamAsFloats("anchors"); } catch (...) {}
+            auto side = out_blob_h;
+            std::cout << side << endl;
+            int anchor_offset = 0;
+            switch (side) {
+                case 13:
+                    anchor_offset = 2 * 6;
+                    break;
+                case 26:
+                    anchor_offset = 2 * 3;
+                    break;
+                case 52:
+                    anchor_offset = 2 * 0;
+                    break;
+                default:
+                    throw std::runtime_error("Invalid output size");
+            }
+            auto side_square = side * side;
+            const float *output_blob = blob->buffer().as<PrecisionTrait<Precision::FP32>::value_type *>();
+            // --------------------------- Parsing YOLO Region output -------------------------------------
+            for (int i = 0; i < side_square; ++i) {
+                int row = i / side;
+                int col = i % side;
+                for (int n = 0; n < num; ++n) {
+                    int obj_index = EntryIndex(side, coords, classes, n * side * side + i, coords);
+                    int box_index = EntryIndex(side, coords, classes, n * side * side + i, 0);
+                    float scale = output_blob[obj_index];
+                    if (scale < threshold)
+                        continue;
+                    double x = (col + output_blob[box_index + 0 * side_square]) / side * resized_im_w;
+                    double y = (row + output_blob[box_index + 1 * side_square]) / side * resized_im_h;
+                    double height = std::exp(output_blob[box_index + 3 * side_square]) * anchors[anchor_offset + 2 * n + 1];
+                    double width = std::exp(output_blob[box_index + 2 * side_square]) * anchors[anchor_offset + 2 * n];
+                    for (int j = 0; j < classes; ++j) {
+                        int class_index = EntryIndex(side, coords, classes, n * side_square + i, coords + 1 + j);
+                        float prob = scale * output_blob[class_index];
+                        if (prob < threshold)
+                            continue;
+                        DetectionObject obj(x, y, height, width, j, prob,
+                                static_cast<float>(original_im_h) / static_cast<float>(resized_im_h),
+                                static_cast<float>(original_im_w) / static_cast<float>(resized_im_w));
+                        objects.push_back(obj);
+                    }
+                }
+            }
+        }
+    public:
+        using object_detection::object_detection;
+        /**
+         * @brief 
+         * 
+         * @param data 
+         * @param size 
+         * @return std::vector<bbox> 
+         */
+        std::vector<bbox> run (const char* data, int size) override {
+            std::vector<bbox> ret;
+            try
+            {
+                // decode the image
+                cv::Mat frame = cv::imdecode(cv::Mat(1,size,CV_8UC3, (unsigned char*) data),cv::IMREAD_UNCHANGED);
+                const int width = frame.size().width;
+                const int height = frame.size().height;
+
+                // create new request
+                InferRequest::Ptr infer_request = exe_network.CreateInferRequestPtr();
+                auto inputInfor = exe_network.GetInputsInfo();
+                auto outputInfor = exe_network.GetOutputsInfo();
+                frameToBlob(frame, infer_request, inputInfor.begin()->first);
+
+                std:: cout << width << " " << height << std::endl;
+                // do inference
+                infer_request->Infer();
+                
+                // process YOLO output, it's quite complicated though
+                unsigned long resized_im_h = inputInfor.begin()->second.get()->getDims()[0];
+                unsigned long resized_im_w = inputInfor.begin()->second.get()->getDims()[1];
+                std:: cout << resized_im_w << " " << resized_im_h << std::endl;
+                std::vector<DetectionObject> objects;
+                // Parsing outputs
+                for (auto &output : outputInfor) {
+                    auto output_name = output.first;
+                    std::cout << output_name << std::endl;
+                    CNNLayerPtr layer = get_layer(output_name.c_str());
+                    Blob::Ptr blob = infer_request->GetBlob(output_name);
+                    ParseYOLOV3Output(layer, blob, resized_im_h, resized_im_w, height, width, 0.5, objects);
+                }
+                // Filtering overlapping boxes
+                std::sort(objects.begin(), objects.end(), std::greater<DetectionObject>());
+                for (size_t i = 0; i < objects.size(); ++i) {
+                    if (objects[i].confidence == 0)
+                        continue;
+                    for (size_t j = i + 1; j < objects.size(); ++j)
+                        if (IntersectionOverUnion(objects[i], objects[j]) >= 0.4)
+                            objects[j].confidence = 0;
+                }
+                // Get the bboxes
+                for (auto &object : objects) {
+                    bbox d;
+                    if (object.confidence < 0.5)
+                        continue;
+                    auto label_id = object.class_id+1;
+                    auto label = labels[label_id-1];
+                    float confidence = object.confidence;
+                    d.prop = confidence;
+                    d.label_id = label_id;
+                    d.label = label;
+                    d.c[0] = object.xmin;
+                    d.c[1] = object.ymin;
+                    d.c[2] = object.xmax;
+                    d.c[3] = object.ymax;
+                    ret.push_back(d);
+                }
+                return ret;
+            }
+            catch(const cv::Exception& e)
+            {
+                std::cerr << e.what() << '\n';
+                return ret;
+            }
+        }
+        using ptr = std::shared_ptr<yolo>;
     };
 
     /*

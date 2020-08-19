@@ -122,13 +122,26 @@ mime_type(beast::string_view path)
 }
 
 /**
- * @brief General worker thread
+ * @brief pure abstract worker thread
  * TODO: add logger
 */
 class worker {
 public:
+    /**
+     * @brief Construct a new worker object
+     * 
+     */
     worker() {}
+    /**
+     * @brief Destroy the worker object
+     * 
+     */
     virtual ~worker() {}
+    /**
+     * @brief bring the worker up
+     * @details each worker will have different functionality.
+     * when () operator is called, they will start serving their basic function
+     */
     virtual void operator()() = 0;
 };
 
@@ -143,8 +156,8 @@ public:
 template <class IEPtr>
 class inference_worker : public worker {
 private:
-    IEPtr Ie; ///
-    object_detection_mq<single_bell>::ptr TaskQueue; 
+    IEPtr Ie;                                           //!< pointer to inference engine
+    object_detection_mq<single_bell>::ptr TaskQueue;    //!< task queue, will get job in this queue
 public:
     /**
      * @brief Construct a new inference worker object
@@ -211,12 +224,12 @@ public:
 template<class IEPtr>
 class http_worker : public worker {
 private:
-    tcp::acceptor& acceptor;                                // the acceptor, needed to init our socket
-    tcp::socket sock{acceptor.get_executor()};              // the endpoint socket, passed from main thread
-    IEPtr Ie;                            // pointer to inference engine in case we use CPU inference
-    void *data;                                             // pointer to data, i.e dashboard
-    object_detection_mq<single_bell>::ptr TaskQueue; 
-    single_bell::ptr bell;
+    tcp::acceptor& acceptor;                                //!< the acceptor, needed to init our socket
+    tcp::socket sock{acceptor.get_executor()};              //!< the endpoint socket, passed from main thread
+    IEPtr Ie;                                               //!< pointer to inference engine in case we use CPU inference
+    void *data;                                             //!< pointer to data, i.e dashboard
+    object_detection_mq<single_bell>::ptr TaskQueue;        //!< task queue
+    single_bell::ptr bell;                                  //!< notify bell
 public:
     /**
      * @brief Construct a new http worker object
@@ -232,9 +245,6 @@ public:
      * @param _Ie 
      * @param _data 
      * @param _TaskQueue 
-     * @param _cv 
-     * @param _mtx 
-     * @param _key 
      */
     http_worker(tcp::acceptor& _acceptor, tcp::socket&& _sock, IEPtr _Ie, void *_data, 
                 object_detection_mq<single_bell>::ptr& _TaskQueue):
@@ -346,7 +356,7 @@ private:
      * @brief 
      * 
      *
-     *  TODO: Implement the function with proper resource
+     * TODO: Implement the function with proper resource
     */
     std::string 
     metadata_request_handler () {
@@ -576,8 +586,8 @@ private:
         spdlog::info("[HTTPW] Shutdown my socket!");
         sock.shutdown(tcp::socket::shutdown_send,ec);
         return;
-    } // session_handler
-}; // class http_worker
+    } //! session_handler
+}; //! class http_worker
 
 /**
  * @brief listening worker that will listen to connection
@@ -586,8 +596,8 @@ private:
 template<class IEPtr>
 class listen_worker {
 private: 
-    object_detection_mq<single_bell>::ptr TaskQueue;
-    IEPtr Ie;
+    object_detection_mq<single_bell>::ptr TaskQueue;    //!< task queue
+    IEPtr Ie;                                           //!< pointer to inference engine
 
 private:
     /**
@@ -680,7 +690,7 @@ public:
     void destroy_ie() {
         Ie = nullptr;
     }
-}; /// class listen worker
+}; //! class listen worker
 
 /**
  * @brief 

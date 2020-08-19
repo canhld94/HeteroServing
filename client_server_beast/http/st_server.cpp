@@ -110,8 +110,8 @@ int main(int argc, char const *argv[])
 
         // inference engine init
         // TODO: make it prettier
-        ie::ssd::ptr Ie = std::make_shared<ie::ssd>(device,model,labels);
-        listen_worker<ie::ssd::ptr> listener{TaskQueue, Ie};
+        ie::yolo::ptr Ie = std::make_shared<ie::yolo>(device,model,labels);
+        listen_worker<ie::yolo::ptr> listener{TaskQueue, Ie};
 
         // FPGA or not
         bool FPGA = device.find("FPGA") != std::string::npos;
@@ -120,7 +120,7 @@ int main(int argc, char const *argv[])
             // and create other thead to run listener
             listener.destroy_ie();
             std::thread{std::bind(listener,ip,port)}.detach();
-            inference_worker<ie::ssd::ptr> inferencer{Ie, TaskQueue};
+            inference_worker<ie::yolo::ptr> inferencer{Ie, TaskQueue};
             inferencer();
         }
         else {

@@ -5,11 +5,11 @@
     {
       "name": "SSD Object Detection",
       "device": "HETERO:FPGA,CPU",
-      "model": "/home/canhld/workplace/MEC_FPGA_DEMO/openvino_models/ssdlite_mobilenet_v2_fp16.xml",
-      "labels": "/home/canhld/workplace/MEC_FPGA_DEMO/openvino_models/ms_coco.txt",
+      "model": "/home/canhld/workplace/MEC_FPGA_DEMO/openvino_models/frozen_darknet_yolov3_model.xml",
+      "labels": "/home/canhld/workplace/MEC_FPGA_DEMO/openvino_models/tf_model/tensorflow-yolo-v3/coco.names",
       "fpga configuration": {
         "dev": "acla0",
-        "bitstream": "/opt/intel/openvino_2019.1.144/bitstreams/a10_devkit_bitstreams/2019R1_A10DK_FP16_MobileNet_Clamp.aocx"
+        "bitstream": "/opt/intel/openvino_2019.1.144/bitstreams/a10_devkit_bitstreams/2019R1_A10DK_FP16_TinyYolo.aocx"
       }
     }
   ]

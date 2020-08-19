@@ -46,6 +46,19 @@ demo_apps/
 
 What have been done and what to learn up to
 
+## ---- 2020 / 08 / 19 ----
+
+- _Problem_:
+
+  - YOLO crash with FPGA server
+  - tiny yolo and yolo is not compatible
+
+- __Road map__:
+
+  - Implement generic inference engine that support other type of model _in progress_
+  - Implement Yolo and Faster RCNN _important_ --> done Yolo
+  - Implement generic http server that can run with other type of inference engine
+
 ## ---- 2020 / 08 / 17 ----
 
 - __Road map__:
