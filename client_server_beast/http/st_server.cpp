@@ -10,6 +10,7 @@
 #include <gflags/gflags.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
+#include <stdlib.h> 
 #include "ultis.h"
 #include "st_workers.h"
 #include "st_ie.h"
@@ -104,17 +105,21 @@ int main(int argc, char const *argv[])
         const std::string &device = ie.get<std::string>("device");
         const std::string &model = ie.get<std::string>("model");
         const std::string &labels = ie.get<std::string>("labels");
+        bool FPGA = device.find("FPGA") != std::string::npos;
+        if (FPGA) {
+            // bitstream
+            const std::string &bitstream = ie.get_child("fpga configuration").get<std::string>("bitstream");
+            setenv("DLA_AOCX",bitstream.c_str(),0);
+        }
 
         // task queue - Not necessary used with CPU inference
         object_detection_mq<single_bell>::ptr TaskQueue = std::make_shared<object_detection_mq<single_bell>>();
 
         // inference engine init
-        // TODO: make it prettier
         ie::yolo::ptr Ie = std::make_shared<ie::yolo>(device,model,labels);
         listen_worker<ie::yolo::ptr> listener{TaskQueue, Ie};
 
         // FPGA or not
-        bool FPGA = device.find("FPGA") != std::string::npos;
         if (FPGA) {
             // we will run inference in main thread 
             // and create other thead to run listener

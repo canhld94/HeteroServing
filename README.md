@@ -48,13 +48,21 @@ What have been done and what to learn up to
 
 ## ---- 2020 / 08 / 19 ----
 
+- Fix problem with crashing on yolov3 fpga, it's very likely because fpga run FP16 but the model is FP32
 - _Problem_:
 
+- __Road map__:
+  - Implement generic inference engine that support other type of model _in progress_
+  - Implement YoloV2 and Faster RCNN _important_
+  - Implement generic http server that can run with other type of inference engine
+
+## ---- 2020 / 08 / 19 ----
+
+- _Problem_:
   - YOLO crash with FPGA server
   - tiny yolo and yolo is not compatible
 
 - __Road map__:
-
   - Implement generic inference engine that support other type of model _in progress_
   - Implement Yolo and Faster RCNN _important_ --> done Yolo
   - Implement generic http server that can run with other type of inference engine
@@ -62,7 +70,6 @@ What have been done and what to learn up to
 ## ---- 2020 / 08 / 17 ----
 
 - __Road map__:
-
   - Implement generic inference engine that support other type of model _important_
   - Implement generic http server that can run with other type of inference engine
 
@@ -71,7 +78,6 @@ What have been done and what to learn up to
 - Fix the deadlock problem, it's likely a system error when we shutdown the FPGA server incorrectly
 - Implement queue and event-loop with STL, get rid of tbb concurrent queue
 - __Road map__:
-
   - Implement generic inference engine that support other type of model _important_
   - Implement generic http server that can run with other type of inference engine
   - Building other API

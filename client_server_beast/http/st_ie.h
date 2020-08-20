@@ -196,8 +196,8 @@ namespace ie {
         void set_labels(const std::string& label) {
             std::ifstream inputFile(label);
             std::copy(std::istream_iterator<std::string>(inputFile),
-            std::istream_iterator<std::string>(),
-            std::back_inserter(labels));
+                std::istream_iterator<std::string>(),
+                std::back_inserter(labels));
         }
         /**
          * @brief Construct a new inference engine object
