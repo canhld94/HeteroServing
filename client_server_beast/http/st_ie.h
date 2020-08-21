@@ -494,8 +494,7 @@ namespace ie {
          */
         std::vector<bbox> run (const char* data, int size) override {
             std::vector<bbox> ret;
-            try
-            {
+            try {
                 // decode the image
                 cv::Mat frame = cv::imdecode(cv::Mat(1,size,CV_8UC3, (unsigned char*) data),cv::IMREAD_UNCHANGED);
                 const int width = frame.size().width;
@@ -507,14 +506,14 @@ namespace ie {
                 auto outputInfor = exe_network.GetOutputsInfo();
                 frameToBlob(frame, infer_request, inputInfor.begin()->first);
 
-                std:: cout << width << " " << height << std::endl;
+                // std:: cout << width << " " << height << std::endl;
                 // do inference
                 infer_request->Infer();
                 
                 // process YOLO output, it's quite complicated though
                 unsigned long resized_im_h = inputInfor.begin()->second.get()->getDims()[0];
                 unsigned long resized_im_w = inputInfor.begin()->second.get()->getDims()[1];
-                std:: cout << resized_im_w << " " << resized_im_h << std::endl;
+                // std:: cout << resized_im_w << " " << resized_im_h << std::endl;
                 std::vector<DetectionObject> objects;
                 // Parsing outputs
                 for (auto &output : outputInfor) {
@@ -552,8 +551,7 @@ namespace ie {
                 }
                 return ret;
             }
-            catch(const cv::Exception& e)
-            {
+            catch(const cv::Exception& e) {
                 std::cerr << e.what() << '\n';
                 return ret;
             }
@@ -566,7 +564,35 @@ namespace ie {
     */
 
     class fast_r_cnn : public object_detection {
+    public:
+        std::vector<bbox> run (const char* data, int size) override {
+            std::vector<bbox> ret;
+            try {
+                // decode the image
+                cv::Mat frame = cv::imdecode(cv::Mat(1,size,CV_8UC3, (unsigned char*) data),cv::IMREAD_UNCHANGED);
+                const int width = frame.size().width;
+                const int height = frame.size().height;
 
+                // create new request
+                InferRequest::Ptr infer_request = exe_network.CreateInferRequestPtr();
+                auto inputInfor = exe_network.GetInputsInfo();
+                auto outputInfor = exe_network.GetOutputsInfo();
+                frameToBlob(frame, infer_request, inputInfor.begin()->first);
+
+                std:: cout << width << " " << height << std::endl;
+                // do inference
+                infer_request->Infer();
+
+                // parse the Faster RCNN output, it is similar to YOLO
+
+                return ret;
+            }
+            catch (const cv::Exception &e) {
+                std::cerr << e.what() << endl;
+            }
+                
+        }
+        
     };
 
     /*
