@@ -1,3 +1,8 @@
+/***************************************************************************************
+ * Copyright (C) 2020 canhld@.kaist.ac.kr
+ * SPDX-License-Identifier: Apache-2.0
+ * @b About: This file is the main application
+ ***************************************************************************************/
 
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
@@ -12,7 +17,7 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <stdlib.h> 
 #include "ultis.h"
-#include "st_workers.h"
+#include "st_worker.h"
 #include "st_ie.h"
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
@@ -20,7 +25,9 @@ namespace net = boost::asio;            // from <boost/asio.hpp>
 namespace bpt = boost::property_tree;   // from <boots/property_tree>
 namespace fs = boost::filesystem;       // from <boots/filesystem>
 typedef bpt::ptree JSON;                // just hiding the ugly name
-using namespace st;
+using namespace st::sync;
+using namespace st::worker;
+using namespace st::ie;
 
 /// @brief message for help argument
 constexpr char help_message[] = "Print this message.";
@@ -28,15 +35,15 @@ constexpr char help_message[] = "Print this message.";
 /// @brief message for images argument
 constexpr char config_file_message[] = "Required: path to server configuration file (json)";
 
-/// \brief Define flag for showing help message <br>
+/// @brief Define flag for showing help message
 DEFINE_bool(h, false, help_message);
 
-/// \brief Define parameter for set image file <br>
+/// @brief Define parameter for set image file
 DEFINE_string(f, "../server_config/config.json", config_file_message);
 
 
 /**
-* \brief This function show a help message
+* @brief This function show a help message
 */
 static void showUsage() {
     std::cout << std::endl;
@@ -49,7 +56,7 @@ static void showUsage() {
 }
 
 
-bool ParseAndCheckCommandLine(int argc,char *argv[]) {
+bool parse_and_check_cmd_line(int argc,char *argv[]) {
     // ---------------------------Parsing and validation of input args--------------------------------------
     gflags::ParseCommandLineNonHelpFlags(&argc, &argv, true);
     if (FLAGS_h) {
@@ -80,7 +87,7 @@ int main(int argc, char const *argv[])
         spdlog::set_level(spdlog::level::debug);
         spdlog::info("Log started!");
         // Check command line arguments.
-        if (!ParseAndCheckCommandLine(argc, const_cast<char**>(argv))) {
+        if (!parse_and_check_cmd_line(argc, const_cast<char**>(argv))) {
             return 0;
         }
         std::cout << "Loading server configuration from " << FLAGS_f << std::endl;
@@ -116,8 +123,8 @@ int main(int argc, char const *argv[])
         object_detection_mq<single_bell>::ptr TaskQueue = std::make_shared<object_detection_mq<single_bell>>();
 
         // inference engine init
-        ie::yolo::ptr Ie = std::make_shared<ie::yolo>(device,model,labels);
-        listen_worker<ie::yolo::ptr> listener{TaskQueue, Ie};
+        yolo::ptr Ie = std::make_shared<yolo>(device,model,labels);
+        listen_worker<yolo::ptr> listener{TaskQueue, Ie};
 
         // FPGA or not
         if (FPGA) {
@@ -125,7 +132,7 @@ int main(int argc, char const *argv[])
             // and create other thead to run listener
             listener.destroy_ie();
             std::thread{std::bind(listener,ip,port)}.detach();
-            inference_worker<ie::yolo::ptr> inferencer{Ie, TaskQueue};
+            inference_worker<yolo::ptr> inferencer{Ie, TaskQueue};
             inferencer();
         }
         else {

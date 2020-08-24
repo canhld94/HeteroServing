@@ -1,5 +1,13 @@
-#ifndef _ST_IE_H_
-#define _ST_IE_H_
+/***************************************************************************************
+ * Copyright (C) 2020 canhld@.kaist.ac.kr
+ * SPDX-License-Identifier: Apache-2.0
+ * @b About: This file is a wrap-over of Intel OpenVino Inference Engine (and others). 
+ * It provide an uniform interface of inference engine, so the worker don't need to worry 
+ * about the underlying implementation of deep learning algorithm in OpenVino or any DL framework.
+ * The only thing that workers care is a class with constructor and an invoking method.
+ ***************************************************************************************/
+
+#pragma once 
 #include <stdio.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -25,27 +33,24 @@
 #include <iterator>
 #include <mutex>
 #include <utility>
-
 #include <memory>
 #include <thread>
 #include <csignal>
 
 #include <inference_engine.hpp>
-
 #include <samples/ocv_common.hpp>
 #include <samples/slog.hpp>
-
 #include <ext_list.hpp>
-
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
+#include "st_layer.h"
 
 namespace st {
 namespace ie {
 
     /**
-     * @brief 
-     * 
+     * @brief Bouding box object
+     * @details Basic bouding box object that can use in any recognition task
      */
     struct bbox {
         int label_id;       //!< label id
@@ -54,7 +59,7 @@ namespace ie {
         int c[4];           //!< coordinates of bounding box
     };
 
-
+    // OpenVino Inference Engine
     using namespace InferenceEngine;
 
     class inference_engine {
@@ -114,7 +119,7 @@ namespace ie {
          * @param device 
          */
         void init_plugin(const std::string& device) {
-            log->info("Init new plugin {}",device);
+            log->info("Init new {} plugin",device);
             std::cout << "Inference Engine version: " << GetInferenceEngineVersion() << endl;
             // Loading Plugin
             plugin = PluginDispatcher().getPluginByDevice(device);
@@ -298,12 +303,21 @@ namespace ie {
         std::vector<bbox> run(const char* data, int size) override {
             std::vector<bbox> ret; // return value
             try {
+                std::chrono::time_point<std::chrono::system_clock> start;
+                std::chrono::time_point<std::chrono::system_clock> end;
+                std::chrono::duration<double,std::milli> elapsed_mil;
+
                 // decode out image
+                start = std::chrono::system_clock::now();
                 cv::Mat frame = cv::imdecode(cv::Mat(1,size,CV_8UC3, (unsigned char*) data),cv::IMREAD_UNCHANGED);
                 const int width = frame.size().width;
                 const int height = frame.size().height;
+                end = std::chrono::system_clock::now();
+                elapsed_mil = end - start;
+                log->debug("Decode image in {} ms", elapsed_mil.count());
 
                 // create new request
+                start = std::chrono::system_clock::now();
                 InferRequest::Ptr infer_request = exe_network.CreateInferRequestPtr();
                 auto inputInfor = exe_network.GetInputsInfo();
                 auto outputInfor = exe_network.GetOutputsInfo();
@@ -311,8 +325,12 @@ namespace ie {
                 
                 // do inference
                 infer_request->Infer();
+                end = std::chrono::system_clock::now(); // sync mode only
+                elapsed_mil = end - start;
+                log->debug("Create and do inference request in {} ms", elapsed_mil.count());
                 
                 // process ssd output
+                start = std::chrono::system_clock::now();
                 CDataPtr &output = outputInfor.begin()->second;
                 auto outputName = outputInfor.begin()->first;
                 const SizeVector outputDims = output->getTensorDesc().getDims();
@@ -344,6 +362,9 @@ namespace ie {
                         ret.push_back(d);
                     }
                 }
+                end = std::chrono::system_clock::now(); // sync mode only
+                elapsed_mil = end - start;
+                log->debug("Parsing network output in {} ms", elapsed_mil.count());
                 return ret;
             }
             catch (const cv::Exception &e) {
@@ -366,11 +387,11 @@ namespace ie {
          * @brief Yolo detection object 
          * 
          */
-        struct DetectionObject {
+        struct detection_object {
             int xmin, ymin, xmax, ymax, class_id;
             float confidence;
 
-            DetectionObject(double x, double y, double h, double w, int class_id, float confidence, float h_scale, float w_scale) {
+            detection_object(double x, double y, double h, double w, int class_id, float confidence, float h_scale, float w_scale) {
                 this->xmin = static_cast<int>((x - w / 2) * w_scale);
                 this->ymin = static_cast<int>((y - h / 2) * h_scale);
                 this->xmax = static_cast<int>(this->xmin + w * w_scale);
@@ -379,10 +400,10 @@ namespace ie {
                 this->confidence = confidence;
             }
 
-            bool operator <(const DetectionObject &s2) const {
+            bool operator <(const detection_object &s2) const {
                 return this->confidence < s2.confidence;
             }
-            bool operator >(const DetectionObject &s2) const {
+            bool operator >(const detection_object &s2) const {
                 return this->confidence > s2.confidence;
             }
         };
@@ -396,12 +417,12 @@ namespace ie {
          * @param entry 
          * @return int 
          */
-        static int EntryIndex(int side, int lcoords, int lclasses, int location, int entry) {
+        static int entry_index(int side, int lcoords, int lclasses, int location, int entry) {
             int n = location / (side * side);
             int loc = location % (side * side);
             return n * side * side * (lcoords + lclasses + 1) + entry * side * side + loc;
         }
-        double IntersectionOverUnion(const DetectionObject &box_1, const DetectionObject &box_2) {
+        double intersection_over_union(const detection_object &box_1, const detection_object &box_2) {
             double width_of_overlap_area = fmin(box_1.xmax, box_2.xmax) - fmax(box_1.xmin, box_2.xmin);
             double height_of_overlap_area = fmin(box_1.ymax, box_2.ymax) - fmax(box_1.ymin, box_2.ymin);
             double area_of_overlap;
@@ -415,10 +436,10 @@ namespace ie {
             return area_of_overlap / area_of_union;
         }
 
-        void ParseYOLOV3Output(const CNNLayerPtr &layer, const Blob::Ptr &blob, const unsigned long resized_im_h,
+        void parse_yolov3_output(const CNNLayerPtr &layer, const Blob::Ptr &blob, const unsigned long resized_im_h,
                             const unsigned long resized_im_w, const unsigned long original_im_h,
                             const unsigned long original_im_w,
-                            const double threshold, std::vector<DetectionObject> &objects) {
+                            const double threshold, std::vector<detection_object> &objects) {
             // --------------------------- Validating output parameters -------------------------------------
             if (layer->type != "RegionYolo")
                 throw std::runtime_error("Invalid output type: " + layer->type + ". RegionYolo expected");
@@ -439,7 +460,6 @@ namespace ie {
             
             try { anchors = layer->GetParamAsFloats("anchors"); } catch (...) {}
             auto side = out_blob_h;
-            std::cout << side << endl;
             int anchor_offset = 0;
             switch (side) {
                 case 13:
@@ -461,8 +481,8 @@ namespace ie {
                 int row = i / side;
                 int col = i % side;
                 for (int n = 0; n < num; ++n) {
-                    int obj_index = EntryIndex(side, coords, classes, n * side * side + i, coords);
-                    int box_index = EntryIndex(side, coords, classes, n * side * side + i, 0);
+                    int obj_index = entry_index(side, coords, classes, n * side * side + i, coords);
+                    int box_index = entry_index(side, coords, classes, n * side * side + i, 0);
                     float scale = output_blob[obj_index];
                     if (scale < threshold)
                         continue;
@@ -471,11 +491,11 @@ namespace ie {
                     double height = std::exp(output_blob[box_index + 3 * side_square]) * anchors[anchor_offset + 2 * n + 1];
                     double width = std::exp(output_blob[box_index + 2 * side_square]) * anchors[anchor_offset + 2 * n];
                     for (int j = 0; j < classes; ++j) {
-                        int class_index = EntryIndex(side, coords, classes, n * side_square + i, coords + 1 + j);
+                        int class_index = entry_index(side, coords, classes, n * side_square + i, coords + 1 + j);
                         float prob = scale * output_blob[class_index];
                         if (prob < threshold)
                             continue;
-                        DetectionObject obj(x, y, height, width, j, prob,
+                        detection_object obj(x, y, height, width, j, prob,
                                 static_cast<float>(original_im_h) / static_cast<float>(resized_im_h),
                                 static_cast<float>(original_im_w) / static_cast<float>(resized_im_w));
                         objects.push_back(obj);
@@ -495,41 +515,52 @@ namespace ie {
         std::vector<bbox> run (const char* data, int size) override {
             std::vector<bbox> ret;
             try {
-                // decode the image
+                std::chrono::time_point<std::chrono::system_clock> start;
+                std::chrono::time_point<std::chrono::system_clock> end;
+                std::chrono::duration<double,std::milli> elapsed_mil;
+
+                // decode out image
+                start = std::chrono::system_clock::now();
                 cv::Mat frame = cv::imdecode(cv::Mat(1,size,CV_8UC3, (unsigned char*) data),cv::IMREAD_UNCHANGED);
                 const int width = frame.size().width;
                 const int height = frame.size().height;
+                end = std::chrono::system_clock::now();
+                elapsed_mil = end - start;
+                log->debug("Decode image in {} ms", elapsed_mil.count());
 
                 // create new request
+                start = std::chrono::system_clock::now();
                 InferRequest::Ptr infer_request = exe_network.CreateInferRequestPtr();
                 auto inputInfor = exe_network.GetInputsInfo();
                 auto outputInfor = exe_network.GetOutputsInfo();
                 frameToBlob(frame, infer_request, inputInfor.begin()->first);
-
-                // std:: cout << width << " " << height << std::endl;
+                
                 // do inference
                 infer_request->Infer();
+                end = std::chrono::system_clock::now(); // sync mode only
+                elapsed_mil = end - start;
+                log->debug("Create and do inference request in {} ms", elapsed_mil.count());
                 
                 // process YOLO output, it's quite complicated though
+                start = std::chrono::system_clock::now();
                 unsigned long resized_im_h = inputInfor.begin()->second.get()->getDims()[0];
                 unsigned long resized_im_w = inputInfor.begin()->second.get()->getDims()[1];
                 // std:: cout << resized_im_w << " " << resized_im_h << std::endl;
-                std::vector<DetectionObject> objects;
+                std::vector<detection_object> objects;
                 // Parsing outputs
                 for (auto &output : outputInfor) {
                     auto output_name = output.first;
-                    std::cout << output_name << std::endl;
                     CNNLayerPtr layer = get_layer(output_name.c_str());
                     Blob::Ptr blob = infer_request->GetBlob(output_name);
-                    ParseYOLOV3Output(layer, blob, resized_im_h, resized_im_w, height, width, 0.5, objects);
+                    parse_yolov3_output(layer, blob, resized_im_h, resized_im_w, height, width, 0.5, objects);
                 }
                 // Filtering overlapping boxes
-                std::sort(objects.begin(), objects.end(), std::greater<DetectionObject>());
+                std::sort(objects.begin(), objects.end(), std::greater<detection_object>());
                 for (size_t i = 0; i < objects.size(); ++i) {
                     if (objects[i].confidence == 0)
                         continue;
                     for (size_t j = i + 1; j < objects.size(); ++j)
-                        if (IntersectionOverUnion(objects[i], objects[j]) >= 0.4)
+                        if (intersection_over_union(objects[i], objects[j]) >= 0.4)
                             objects[j].confidence = 0;
                 }
                 // Get the bboxes
@@ -549,6 +580,9 @@ namespace ie {
                     d.c[3] = object.ymax;
                     ret.push_back(d);
                 }
+                end = std::chrono::system_clock::now(); // sync mode only
+                elapsed_mil = end - start;
+                log->debug("Parsing network output in {} ms", elapsed_mil.count());
                 return ret;
             }
             catch(const cv::Exception& e) {
@@ -563,28 +597,44 @@ namespace ie {
         Fast r cnn inferencer
     */
 
-    class fast_r_cnn : public object_detection {
+    class faster_r_cnn : public object_detection {
+    private:
+        void parse_faster_rcnn_output () {
+
+        };
     public:
         std::vector<bbox> run (const char* data, int size) override {
             std::vector<bbox> ret;
             try {
-                // decode the image
-                cv::Mat frame = cv::imdecode(cv::Mat(1,size,CV_8UC3, (unsigned char*) data),cv::IMREAD_UNCHANGED);
-                const int width = frame.size().width;
-                const int height = frame.size().height;
+                // std::chrono::time_point<std::chrono::system_clock> start;
+                // std::chrono::time_point<std::chrono::system_clock> end;
+                // std::chrono::duration<double,std::milli> elapsed_mil;
 
-                // create new request
-                InferRequest::Ptr infer_request = exe_network.CreateInferRequestPtr();
-                auto inputInfor = exe_network.GetInputsInfo();
-                auto outputInfor = exe_network.GetOutputsInfo();
-                frameToBlob(frame, infer_request, inputInfor.begin()->first);
+                // // decode out image
+                // start = std::chrono::system_clock::now();
+                // cv::Mat frame = cv::imdecode(cv::Mat(1,size,CV_8UC3, (unsigned char*) data),cv::IMREAD_UNCHANGED);
+                // const int width = frame.size().width;
+                // const int height = frame.size().height;
+                // end = std::chrono::system_clock::now();
+                // elapsed_mil = end - start;
+                // log->debug("Decode image in {} ms", elapsed_mil.count());
 
-                std:: cout << width << " " << height << std::endl;
-                // do inference
-                infer_request->Infer();
+                // // create new request
+                // start = std::chrono::system_clock::now();
+                // InferRequest::Ptr infer_request = exe_network.CreateInferRequestPtr();
+                // auto inputInfor = exe_network.GetInputsInfo();
+                // auto outputInfor = exe_network.GetOutputsInfo();
+                // frameToBlob(frame, infer_request, inputInfor.begin()->first);
+                
+                // // do inference
+                // infer_request->Infer();
+                // end = std::chrono::system_clock::now(); // sync mode only
+                // elapsed_mil = end - start;
+                // log->debug("Create and do inference request in {} ms", elapsed_mil.count());
+                // CNNLayerPtr pt = CNNLayerPtr(new CNNLayer({"dsd","dsafs"}));
+                // // DetectionOutputPostProcessor detOutPostProcessor(detectionOutLayer.get());
 
-                // parse the Faster RCNN output, it is similar to YOLO
-
+                // // parse the Faster RCNN output, it is similar to YOLO
                 return ret;
             }
             catch (const cv::Exception &e) {
@@ -628,5 +678,3 @@ namespace ie {
     };
 } // namespace st
 } // namespace ie
-
-#endif
