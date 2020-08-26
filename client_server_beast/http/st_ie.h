@@ -603,44 +603,108 @@ namespace ie {
 
         };
     public:
-        std::vector<bbox> run (const char* data, int size) override {
-            std::vector<bbox> ret;
+        // void init_IO(Precision p) override {
+        //     auto inputInfo = InputsDataMap(network.getInputsInfo());
+        //     InputInfo::Ptr& input = inputInfo.begin()->second;
+        //     input->setPrecision(p);
+        //     input->getInputData()->setLayout(Layout::NCHW);
+        // }
+        void IO_sanity_check() override {
+            // Input Blob
+            auto inputInfo = exe_network.GetInputsInfo();
+            if (inputInfo.size() != 1) {
+                throw std::logic_error("Current version of IE accepts networks having only one input");
+            }
+
+            // Output Blob
+            network.addOutput
+            auto outputInfo = exe_network.GetOutputsInfo();
+            // Faster R-CNN has two head: cls_score and bbox_pred
+            if (outputInfo.size() != 2) {
+                throw std::logic_error("Faster R-CNN must have two outputs: cls_score and bbox_pred");
+            }
+            CDataPtr& output = outputInfo.begin()->second;
+            const SizeVector outputDims = output->getTensorDesc().getDims();
+            const int objectSize = outputDims[3];
+            if (objectSize != 7) {
+                throw std::logic_error("SSD should have 7 as a last dimension");
+            }
+            if (outputDims.size() != 4) {
+                throw std::logic_error("Incorrect output dimensions for SSD");
+            }
+        }
+        std::vector<bbox> run(const char* data, int size) override {
+            std::vector<bbox> ret; // return value
             try {
-                // std::chrono::time_point<std::chrono::system_clock> start;
-                // std::chrono::time_point<std::chrono::system_clock> end;
-                // std::chrono::duration<double,std::milli> elapsed_mil;
+                std::chrono::time_point<std::chrono::system_clock> start;
+                std::chrono::time_point<std::chrono::system_clock> end;
+                std::chrono::duration<double,std::milli> elapsed_mil;
 
-                // // decode out image
-                // start = std::chrono::system_clock::now();
-                // cv::Mat frame = cv::imdecode(cv::Mat(1,size,CV_8UC3, (unsigned char*) data),cv::IMREAD_UNCHANGED);
-                // const int width = frame.size().width;
-                // const int height = frame.size().height;
-                // end = std::chrono::system_clock::now();
-                // elapsed_mil = end - start;
-                // log->debug("Decode image in {} ms", elapsed_mil.count());
+                // decode out image
+                start = std::chrono::system_clock::now();
+                cv::Mat frame = cv::imdecode(cv::Mat(1,size,CV_8UC3, (unsigned char*) data),cv::IMREAD_UNCHANGED);
+                const int width = frame.size().width;
+                const int height = frame.size().height;
+                end = std::chrono::system_clock::now();
+                elapsed_mil = end - start;
+                log->debug("Decode image in {} ms", elapsed_mil.count());
 
-                // // create new request
-                // start = std::chrono::system_clock::now();
-                // InferRequest::Ptr infer_request = exe_network.CreateInferRequestPtr();
-                // auto inputInfor = exe_network.GetInputsInfo();
-                // auto outputInfor = exe_network.GetOutputsInfo();
-                // frameToBlob(frame, infer_request, inputInfor.begin()->first);
+                // create new request
+                start = std::chrono::system_clock::now();
+                InferRequest::Ptr infer_request = exe_network.CreateInferRequestPtr();
+                auto inputInfor = exe_network.GetInputsInfo();
+                auto outputInfor = exe_network.GetOutputsInfo();
+                frameToBlob(frame, infer_request, inputInfor.begin()->first);
                 
-                // // do inference
-                // infer_request->Infer();
-                // end = std::chrono::system_clock::now(); // sync mode only
-                // elapsed_mil = end - start;
-                // log->debug("Create and do inference request in {} ms", elapsed_mil.count());
-                // CNNLayerPtr pt = CNNLayerPtr(new CNNLayer({"dsd","dsafs"}));
-                // // DetectionOutputPostProcessor detOutPostProcessor(detectionOutLayer.get());
+                // do inference
+                infer_request->Infer();
+                end = std::chrono::system_clock::now(); // sync mode only
+                elapsed_mil = end - start;
+                log->debug("Create and do inference request in {} ms", elapsed_mil.count());
+                
+                // process ssd output
+                start = std::chrono::system_clock::now();
+                CDataPtr &output = outputInfor.begin()->second;
+                auto outputName = outputInfor.begin()->first;
+                const SizeVector outputDims = output->getTensorDesc().getDims();
+                const int maxProposalCount = outputDims[2];
+                const int objectSize = outputDims[3];
+                const float *detections = infer_request->GetBlob(outputName)->buffer().as<PrecisionTrait<Precision::FP32>::value_type*>();
+                for (int i = 0; i < maxProposalCount; i++) {
+                    float image_id = detections[i * objectSize + 0];
+                    if (image_id < 0) {
+                        break;
+                    }
+                    float confidence = detections[i * objectSize + 2];
+                    auto label_id = static_cast<int>(detections[i * objectSize + 1]);
+                    int xmin = detections[i * objectSize + 3] * width;
+                    int ymin = detections[i * objectSize + 4] * height;
+                    int xmax = detections[i * objectSize + 5] * width;
+                    int ymax = detections[i * objectSize + 6] * height;
+                    auto label = labels[label_id-1];
 
-                // // parse the Faster RCNN output, it is similar to YOLO
+                    if (confidence > 0.45) {
+                        bbox d;
+                        d.prop = confidence;
+                        d.label_id = label_id;
+                        d.label = label;
+                        d.c[0] = xmin;
+                        d.c[1] = ymin;
+                        d.c[2] = xmax;
+                        d.c[3] = ymax;
+                        ret.push_back(d);
+                    }
+                }
+                end = std::chrono::system_clock::now(); // sync mode only
+                elapsed_mil = end - start;
+                log->debug("Parsing network output in {} ms", elapsed_mil.count());
                 return ret;
             }
             catch (const cv::Exception &e) {
-                std::cerr << e.what() << endl;
+                // let not opencv silly exception terminate our program
+                std::cerr << "Error: " << e.what() << std::endl;
+                return ret;
             }
-                
         }
         
     };
