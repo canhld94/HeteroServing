@@ -1,12 +1,9 @@
-# Copyright (C) 2018-2019 Intel Corporation
-# SPDX-License-Identifier: Apache-2.0
-#
 # Copyright (C) 2020 canhld@kaist.ac.kr
 # SPDX-License-Identifier: Apache-2.0
 #
 cmake_minimum_required (VERSION 3.13)
 
-project(mec_fpga_demo)
+project(something)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake-modules)
 
 if (CMAKE_BUILD_TYPE STREQUAL "")
@@ -61,7 +58,6 @@ endif()
 
 include_directories (
         ${CMAKE_CURRENT_SOURCE_DIR}/common
-        ${CMAKE_CURRENT_SOURCE_DIR}/ncl
 )
 
 # Package manager
@@ -73,13 +69,16 @@ find_package(InferenceEngine 1.6 REQUIRED)
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup()
 
+# Project components
+add_subdirectory(server)
+
 # Install to root
 set (CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_SOURCE_DIR})
-# Project components
-add_subdirectory(format_reader) # helper library @Intel
-# add_subdirectory(ssd_standalone) # SSD demonstration standalone
-# add_subdirectory(ssd_inference_server) # SSD inference server (release)
-add_subdirectory(client_server_beast) # development http server folder
+install(TARGETS ie_cpu_extension
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION bin
+        ARCHIVE DESTINATION bin
+)
 
 # Testing
 # add_subdirectory(test)

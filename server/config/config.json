@@ -1,0 +1,16 @@
+{
+  "ip": "0.0.0.0",
+  "port": "8080",
+  "inference engine": [
+    {
+      "name": "YOLO Object Detection",
+      "device": "HETERO:FPGA,CPU",
+      "model": "/home/canhld/workplace/InferenceServer/openvino_models/yolo_v3_fp16.xml",
+      "labels": "/home/canhld/workplace/InferenceServer/openvino_models/ms_coco_80.txt",
+      "fpga configuration": {
+        "dev": "acla0",
+        "bitstream": "/opt/intel/openvino_2019.1.144/bitstreams/a10_devkit_bitstreams/2019R1_A10DK_FP16_TinyYolo.aocx"
+      }
+    }
+  ]
+}
