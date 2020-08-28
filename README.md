@@ -38,7 +38,7 @@ If you don't want to use conan, mannually add cmake modules to the Cmake files.
 ├── server                  >> Server
 │   ├── config              >> Server configuration
 │   ├── libs                >> Libararies that implement components of the server
-│   ├── parallel            >> Server runs in parallel (concurrency) modek
+│   ├── parallel            >> Server runs in parallel (concurrency) model
 │   └── reactor             >> Server runs in reactor model
 └── test
 ```
