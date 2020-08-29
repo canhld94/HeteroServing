@@ -36,12 +36,14 @@
 #include <memory>
 #include <thread>
 #include <csignal>
+#include <algorithm>
 
 #include <inference_engine.hpp>
 #include <opencv2/opencv.hpp>
 #include <ext_list.hpp>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
+#include "st_exception.h"
 
 namespace st {
 namespace ie {
@@ -141,7 +143,11 @@ namespace ie {
          * 
          */
         inference_engine() {
-            log = spdlog::basic_logger_mt("IELog","logs/IE.txt");
+            std::ostringstream ss;
+            ss << "IELog" << std::this_thread::get_id();
+            std::string log_name = ss.str();
+            std::cout << log_name << endl;
+            log = spdlog::basic_logger_mt(log_name.c_str(),"logs/IE.txt");
             log->set_pattern("[%H:%M:%S %z] [%n] [%^---%L---%$] [thread %t] %v");
             log->info("Log started!");
         }
@@ -244,7 +250,11 @@ namespace ie {
          * @param label 
          */
         inference_engine(const std::string& device, const std::string& model, const std::string& label) {
-            log = spdlog::basic_logger_mt("IELog","logs/IE.txt");
+            std::ostringstream ss;
+            ss << "IELog" << rand();
+            std::string log_name = ss.str();
+            std::cout << log_name << endl;
+            log = spdlog::basic_logger_mt(log_name.c_str(),"logs/IE.txt");
             log->set_pattern("[%H:%M:%S %z] [%n] [%^---%L---%$] [thread %t] %v");
             log->info("Log started!");
             init_plugin(device);
@@ -261,6 +271,14 @@ namespace ie {
          */
         CNNLayerPtr get_layer(const char* name) {
             return network.getLayerByName(name);
+        }
+
+        virtual std::vector<bbox> run_detection(const char* data, int size) {
+            return {};
+        }
+
+        virtual std::vector<int> run_classification(const char* data, int size) {
+            return {};
         }
         using ptr = std::shared_ptr<inference_engine>;
     };
@@ -280,14 +298,7 @@ namespace ie {
         }
     public:
         using inference_engine::inference_engine;
-        /**
-         * @brief Run detection
-         * @details This funtion is virtual and must be overrided in each detector 
-         * @return std::vector<bbox> 
-         */
-        virtual std::vector<bbox> run(const char* data, int size) {
-            return {};
-        }
+
         using ptr = std::shared_ptr<object_detection>;
     };
     /**
@@ -332,7 +343,7 @@ namespace ie {
          * @param size 
          * @return std::vector<bbox> 
          */
-        std::vector<bbox> run(const char* data, int size) override {
+        std::vector<bbox> run_detection(const char* data, int size) override {
             std::vector<bbox> ret; // return value
             try {
                 std::chrono::time_point<std::chrono::system_clock> start;
@@ -544,7 +555,7 @@ namespace ie {
          * @param size 
          * @return std::vector<bbox> 
          */
-        std::vector<bbox> run (const char* data, int size) override {
+        std::vector<bbox> run_detection (const char* data, int size) override {
             std::vector<bbox> ret;
             try {
                 std::chrono::time_point<std::chrono::system_clock> start;
@@ -664,7 +675,7 @@ namespace ie {
                 throw std::logic_error("Incorrect output dimensions for SSD");
             }
         }
-        std::vector<bbox> run(const char* data, int size) override {
+        std::vector<bbox> run_detection(const char* data, int size) override {
             std::vector<bbox> ret; // return value
             try {
                 std::chrono::time_point<std::chrono::system_clock> start;
@@ -740,36 +751,79 @@ namespace ie {
         
     };
 
-    /*
-        classification generic interface
-    */
-
+    /**
+     * @brief 
+     * 
+     */
     class classification : public inference_engine {
 
     };
 
-    /*
-        Resnet inferencer
-    */
-
+    /**
+     * @brief 
+     * 
+     */
     class resnet101 : public classification {
 
     };
 
-    /*
-        Segmentation generic interface
-    */
-
+    /**
+     * @brief 
+     * 
+     */
     class segmentation : public inference_engine {
         
     };
 
-    /*
-        MaskRCNN inferencer
-    */
-
+    /**
+     * @brief 
+     * 
+     */
     class mask_r_cnn :  public segmentation {
 
+    };
+
+    /**
+     * @brief 
+     * 
+     */
+    class ie_factory {
+    public:
+        /**
+         * @brief 
+         * 
+         */
+        enum ie_type {
+            SSD = 0,
+            YOLOv3 = 1,
+            FASTER_RCNN = 2,
+        };
+        ie_type str2type(const std::string& model_name) {
+            std::string name(model_name);
+            std::transform(model_name.begin(), model_name.end(), name.begin(),
+                           [](unsigned char c) {return std::tolower(c);});
+            if (name == "ssd") {
+                return ie_type::SSD;
+            }
+            else if (name == "yolov3") {
+                return ie_type::YOLOv3;
+            }
+            else {
+                throw st::exception::ie_not_implemented();
+            }
+        }
+        object_detection::ptr create_inference_engin(ie_type type, const std::string &device, 
+                                                     const std::string& model, const std::string& label) {
+            switch (type) {
+            case ie_type::SSD :
+                return  std::make_shared<ssd>(device,model,label);
+                break;
+            case ie_type::YOLOv3 :
+                return std::make_shared<yolo>(device,model,label);
+            default :
+                throw st::exception::ie_not_implemented();
+            }
+        }
     };
 } // namespace st
 } // namespace ie

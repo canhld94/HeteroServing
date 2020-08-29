@@ -19,6 +19,7 @@
 #include "st_ultis.h"
 #include "st_worker.h"
 #include "st_ie.h"
+#include "st_exception.h"
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
@@ -28,6 +29,7 @@ typedef bpt::ptree JSON;                // just hiding the ugly name
 using namespace st::sync;
 using namespace st::worker;
 using namespace st::ie;
+using namespace st::exception;
 
 /// @brief message for help argument
 constexpr char help_message[] = "Print this message.";
@@ -107,32 +109,56 @@ int main(int argc, char const *argv[])
         // server
         auto ip = config.get<std::string>("ip");
         auto port = config.get<std::string>("port");
-        // model
-        const auto &ie = config.get_child("inference engine").begin()->second;
-        const std::string &device = ie.get<std::string>("device");
-        const std::string &model = ie.get<std::string>("model");
-        const std::string &labels = ie.get<std::string>("labels");
-        bool FPGA = device.find("FPGA") != std::string::npos;
-        if (FPGA) {
-            // bitstream
-            const std::string &bitstream = ie.get_child("fpga configuration").get<std::string>("bitstream");
-            setenv("DLA_AOCX",bitstream.c_str(),0);
+
+        // inference engine
+        std::vector<inference_engine::ptr> IEs;
+        const auto &ie_array = config.get_child("inference engine");
+        std::unordered_set<std::string> fpga_devs; 
+        ie_factory factory;
+        for (auto it = ie_array.begin(); it != ie_array.end(); ++it) {
+            auto ie = it->second;
+            const std::string name = ie.get<std::string>("name");
+            const std::string &device = ie.get<std::string>("device");
+            const std::string &model = ie.get<std::string>("model");
+            const std::string &labels = ie.get<std::string>("labels");
+            bool FPGA = device.find("FPGA") != std::string::npos;
+            if (FPGA) {
+                auto &fpga_conf = ie.get_child("fpga configuration");
+                // fpga device number, cannot shared by now
+                const std::string &dev = fpga_conf.get<std::string>("dev");
+                if (fpga_devs.find(dev) != fpga_devs.end()) {
+                    throw fpga_overused();
+                }
+                fpga_devs.insert(dev);
+                // bitstream
+                const std::string &bitstream = fpga_conf.get<std::string>("bitstream");
+                // setenv("DLA_AOCX",bitstream.c_str(),0);
+                setenv("CL_CONTEXT_COMPILER_MODE_INTELFPGA","3",0);
+            }
+            auto type = factory.str2type(name);
+            IEs.push_back(factory.create_inference_engin(type,device,model,labels));
         }
 
         // task queue - Not necessary used with CPU inference
         object_detection_mq<single_bell>::ptr TaskQueue = std::make_shared<object_detection_mq<single_bell>>();
-
-        // inference engine init
-        yolo::ptr Ie = std::make_shared<yolo>(device,model,labels);
-        listen_worker<yolo::ptr> listener{TaskQueue, Ie};
+        
+        // listening worker
+        listen_worker<inference_engine::ptr> listener{TaskQueue};
 
         // FPGA or not
-        if (FPGA) {
+        if (true) {
             // we will run inference in main thread 
             // and create other thead to run listener
-            listener.destroy_ie();
             std::thread{std::bind(listener,ip,port)}.detach();
-            inference_worker<yolo::ptr> inferencer{Ie, TaskQueue};
+
+            int num_workers = IEs.size() - 1;
+            std::vector<std::thread> ie_workers(num_workers);
+            for (int i = 0; i < num_workers; ++i) {
+                inference_worker<inference_engine::ptr> inferencer{IEs[i+1], TaskQueue};
+                ie_workers[i] = std::thread{std::bind(inferencer)};
+                ie_workers[i].detach();
+            }
+            inference_worker<inference_engine::ptr> inferencer{IEs[0], TaskQueue};
             inferencer();
         }
         else {

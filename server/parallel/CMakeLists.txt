@@ -5,7 +5,7 @@
 # This testing server use a modified version of beast for better opitmization
 link_directories(${LIB_FOLDER})
 
-add_executable(parallel_server st_server.cpp)
+add_executable(parallel_server st_server_parallel.cpp)
 
 set_target_properties(parallel_server PROPERTIES "CMAKE_CXX_FLAGS" "${CMAKE_CXX_FLAGS} -fPIE")
 set_target_properties(parallel_server PROPERTIES "CMAKE_CXX_FLAGS" "${CMAKE_CXX_FLAGS} -fPIE")

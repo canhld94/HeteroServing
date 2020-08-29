@@ -204,7 +204,7 @@ namespace worker {
                     auto m = TaskQueue->pop();
                     // m.bell->lock();
                     spdlog::info("[IEW] Invoke inference engine {}", TaskQueue->size());
-                    *m.predictions = Ie->run(m.data, m.size);
+                    *m.predictions = Ie->run_detection(m.data, m.size);
                     spdlog::info("[IEW] Done inferencing, predidiction size = {}", m.predictions->size());
                     // Push to queue and notify the http_worker
                     spdlog::info("[IEW] signaling request thread");
@@ -399,7 +399,7 @@ namespace worker {
             // exception handling in run, no need to santiny check
             if (Ie) {
                 // in this case, we can run IE ourself
-                prediction = Ie->run(data,size);
+                prediction = Ie->run_detection(data,size);
             }
             else {
                 // need to pass to inference worker
@@ -644,17 +644,21 @@ namespace worker {
          * @brief Construct a new listen worker object
          * 
          * @param _TaskQueue 
-         * @param _cv 
-         * @param _mtx 
-         * @param _key 
          * @param _Ie 
          */
-        explicit
         listen_worker(object_detection_mq<single_bell>::ptr& _TaskQueue,
                     IEPtr& _Ie):
                     TaskQueue(_TaskQueue), Ie(_Ie)
                     {}
 
+        /**
+         * @brief Construct a new listen worker object
+         * 
+         * @param _TaskQueue 
+         */
+        listen_worker(object_detection_mq<single_bell>::ptr& _TaskQueue):
+                    TaskQueue(_TaskQueue)
+                    {}
         /**
          * @brief Destroy the listen worker object
          * 

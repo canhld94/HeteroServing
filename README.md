@@ -16,7 +16,7 @@ glfags==2.2.2: argv parsing
 gtest==1.10.0: testing
 ```
 
-The following package are required to build the project
+The following package are required to build the project. Note that even this could run with GCC5, sometime when you run the server with FPGA under high 
 
 ```
 GCC>=5
