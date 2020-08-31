@@ -274,7 +274,7 @@ namespace worker {
             session_handler();
         }
     private:
-    /**
+        /**
         * @brief This funtion generate error response 
         * @details Depend on the type of error status, different responses messages are generated
         * @tparam Body 

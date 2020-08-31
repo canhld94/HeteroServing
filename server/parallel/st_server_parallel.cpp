@@ -145,27 +145,23 @@ int main(int argc, char const *argv[])
         // listening worker
         listen_worker<inference_engine::ptr> listener{TaskQueue};
 
-        // FPGA or not
-        if (true) {
-            // we will run inference in main thread 
-            // and create other thead to run listener
-            std::thread{std::bind(listener,ip,port)}.detach();
+        // inference work group
+        std::thread{std::bind(listener,ip,port)}.detach();
 
-            int num_workers = IEs.size() - 1;
-            std::vector<std::thread> ie_workers(num_workers);
-            for (int i = 0; i < num_workers; ++i) {
-                inference_worker<inference_engine::ptr> inferencer{IEs[i+1], TaskQueue};
-                ie_workers[i] = std::thread{std::bind(inferencer)};
-                ie_workers[i].detach();
-            }
-            inference_worker<inference_engine::ptr> inferencer{IEs[0], TaskQueue};
-            inferencer();
+        // FPGA inference worker cannot run outside of main threads
+        // Therefore, current version of inference server can run at most
+        // one FPGA inference worker. By convention, we assume that if there
+        // is a FPGA inferencer, it would be the first IE in the configuration
+        // file
+        int num_workers = IEs.size() - 1;
+        std::vector<std::thread> ie_workers(num_workers);
+        for (int i = 0; i < num_workers; ++i) {
+            inference_worker<inference_engine::ptr> inferencer{IEs[i+1], TaskQueue};
+            ie_workers[i] = std::thread{std::bind(inferencer)};
+            ie_workers[i].detach();
         }
-        else {
-            // we don't need explicit inferencer thread
-            // this thread will run listener
-            listener(ip,port);
-        }
+        inference_worker<inference_engine::ptr> inferencer{IEs[0], TaskQueue};
+        inferencer();
     }
     catch(const std::exception& e)
     {

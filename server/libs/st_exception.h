@@ -34,14 +34,14 @@ namespace exception {
 
     class ie_not_implemented : public ie_exception {
     public:
-        virtual char const * what() const noexcept override {
+        char const * what() const noexcept override {
             return "Model not yet implemented";
         }
     };
 
     class fpga_overused : public server_exception {
     public:
-        virtual char const * what() const noexcept override {
+        char const * what() const noexcept override {
             return "Two inference engines cannot shared fpga device";
         }
     };
