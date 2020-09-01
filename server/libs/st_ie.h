@@ -499,11 +499,11 @@ namespace ie {
             try { num = layer->GetParamAsInts("mask").size(); } catch (...) {}
             auto coords = layer->GetParamAsInt("coords");
             auto classes = layer->GetParamAsInt("classes");
-            std::vector<float> anchors = {10.0, 13.0, 16.0, 30.0, 33.0, 23.0, 30.0, 61.0, 62.0, 45.0, 59.0, 119.0, 116.0, 90.0,
-                                        156.0, 198.0, 373.0, 326.0};            
+            std::vector<float> anchors = {10.0, 13.0, 16.0, 30.0, 33.0, 23.0, 30.0, 61.0, 62.0, 45.0, 59.0, 119.0, 116.0, 90.0, 156.0, 198.0, 373.0, 326.0};            
             try { anchors = layer->GetParamAsFloats("anchors"); } catch (...) {}
             auto side = out_blob_h;
             int anchor_offset = 0;
+            std::cout << side << endl;
             switch (side) {
                 case 13:
                     anchor_offset = 2 * 6;
@@ -675,9 +675,8 @@ namespace ie {
 
     class faster_r_cnn : public inference_engine {
     private:
-        void parse_faster_rcnn_output () {
-
-        };
+        int input_width;
+        int input_height;
     public:
         /**
          * @brief Init IO for faster RCNN
@@ -693,6 +692,9 @@ namespace ie {
                     // this is image tensor
                     item.second->setPrecision(p);
                     item.second->setLayout(layout);
+                    input_width = item.second->getInputData()->getTensorDesc().getDims()[2];
+                    input_height = item.second->getInputData()->getTensorDesc().getDims()[3];
+                    // std::cout << input_width << " " << input_height << std::endl;
                 }
                 else if (item.second->getInputData()->getTensorDesc().getDims().size() == 2) {
                     // this is image info 
@@ -758,9 +760,9 @@ namespace ie {
                 // create new request
                 start = std::chrono::system_clock::now();
                 InferRequest::Ptr infer_request = exe_network.CreateInferRequestPtr();
-                auto inputInfor = exe_network.GetInputsInfo();
-                auto outputInfor = exe_network.GetOutputsInfo();
-                for (auto it = inputInfor.begin(); it != inputInfor.end(); it++) {
+                auto inputInfo = exe_network.GetInputsInfo();
+                auto outputInfo = exe_network.GetOutputsInfo();
+                for (auto it = inputInfo.begin(); it != inputInfo.end(); it++) {
                     auto name = it->first;
                     auto input = it->second;
                     if (input->getTensorDesc().getDims().size() == 4) {
@@ -769,8 +771,8 @@ namespace ie {
                     else if (input->getTensorDesc().getDims().size() == 2) {
                         Blob::Ptr input2 = infer_request->GetBlob(name);
                         float *p = input2->buffer().as<PrecisionTrait<Precision::FP32>::value_type*>();
-                        p[0] = static_cast<float>(600);
-                        p[1] = static_cast<float>(600);
+                        p[0] = static_cast<float>(input_width);
+                        p[1] = static_cast<float>(input_height);
                     }
                 }
                 // frameToBlob(frame, infer_request, inputInfor.begin()->first);
@@ -783,8 +785,8 @@ namespace ie {
                 
                 // process output
                 start = std::chrono::system_clock::now();
-                CDataPtr &output = outputInfor.begin()->second;
-                auto outputName = outputInfor.begin()->first;
+                CDataPtr &output = outputInfo.begin()->second;
+                auto outputName = outputInfo.begin()->first;
                 const SizeVector outputDims = output->getTensorDesc().getDims();
                 const int maxProposalCount = outputDims[2];
                 const int objectSize = outputDims[3];
@@ -802,7 +804,7 @@ namespace ie {
                     int ymax = detections[i * objectSize + 6] * height;
                     auto label = labels[label_id-1];
 
-                    if (confidence > 0.45) {
+                    if (confidence > 0.5) {
                         bbox d;
                         d.prop = confidence;
                         d.label_id = label_id;

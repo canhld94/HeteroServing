@@ -21,6 +21,7 @@ for p in data["predictions"]:
     bbox = p["detection_box"]
     tl = (int(bbox[0]),int(bbox[1]))
     br = (int(bbox[2]),int(bbox[3]))
-    draw.rectangle((tl,br),outline = "red", width = 5)
+    draw.rectangle((tl,br),outline = "red", width = 3)
+    draw.text((int(bbox[0]),int(bbox[1])-10), label + " " + str(score))
 
 im.save("testing.jpg","JPEG")
