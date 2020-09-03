@@ -150,15 +150,7 @@ namespace ie {
          * @brief Construct a new inference engine object
          * 
          */
-        inference_engine() {
-            std::ostringstream ss;
-            ss << "IELog" << std::this_thread::get_id();
-            std::string log_name = ss.str();
-            std::cout << log_name << endl;
-            log = spdlog::basic_logger_mt(log_name.c_str(),"logs/IE.txt");
-            log->set_pattern("[%H:%M:%S %z] [%n] [%^---%L---%$] [thread %t] %v");
-            log->info("Log started!");
-        }
+        inference_engine() {}
         /**
          * @brief Initilize the device plugin
          * 
@@ -306,21 +298,21 @@ namespace ie {
             // Input Blob
             auto inputInfo = exe_network.GetInputsInfo();
             if (inputInfo.size() != 1) {
-                throw std::logic_error("Current version of IE accepts networks having only one input");
+                throw std::logic_error("SSD has only one input");
             }
             // Output Blob
             auto outputInfo = exe_network.GetOutputsInfo();
             if (outputInfo.size() != 1) {
-                throw std::logic_error("Current version of IE accepts networks having only one output");
+                throw std::logic_error("SSD has only one output");
             }
             CDataPtr& output = outputInfo.begin()->second;
             const SizeVector outputDims = output->getTensorDesc().getDims();
             const int objectSize = outputDims[3];
-            if (objectSize != 7) {
-                throw std::logic_error("SSD should have 7 as a last dimension");
-            }
             if (outputDims.size() != 4) {
                 throw std::logic_error("Incorrect output dimensions for SSD");
+            }
+            if (objectSize != 7) {
+                throw std::logic_error("SSD should have 7 as a last dimension");
             }
         }
         /**
@@ -331,6 +323,7 @@ namespace ie {
          * @return std::vector<bbox> 
          */
         std::vector<bbox> run_detection(const char* data, int size) override {
+            IO_sanity_check();
             std::vector<bbox> ret; // return value
             try {
                 std::chrono::time_point<std::chrono::system_clock> start;
@@ -621,7 +614,6 @@ namespace ie {
                 start = std::chrono::system_clock::now();
                 unsigned long resized_im_h = inputInfor.begin()->second.get()->getDims()[0];
                 unsigned long resized_im_w = inputInfor.begin()->second.get()->getDims()[1];
-                // std:: cout << resized_im_w << " " << resized_im_h << std::endl;
                 std::vector<detection_object> objects;
                 // Parsing outputs
                 for (auto &output : outputInfor) {
@@ -666,6 +658,10 @@ namespace ie {
                 return ret;
             }
         }
+        /**
+         * @brief 
+         * 
+         */
         using ptr = std::shared_ptr<yolo>;
     };
 
@@ -692,9 +688,9 @@ namespace ie {
                     // this is image tensor
                     item.second->setPrecision(p);
                     item.second->setLayout(layout);
+                    // save input image for later used
                     input_width = item.second->getInputData()->getTensorDesc().getDims()[2];
                     input_height = item.second->getInputData()->getTensorDesc().getDims()[3];
-                    // std::cout << input_width << " " << input_height << std::endl;
                 }
                 else if (item.second->getInputData()->getTensorDesc().getDims().size() == 2) {
                     // this is image info 
@@ -721,15 +717,16 @@ namespace ie {
         void IO_sanity_check() override {
             // Input Blob
             auto inputInfo = exe_network.GetInputsInfo();
-            if (inputInfo.size() != 1) {
-                throw std::logic_error("Current version of IE accepts networks having only one input");
+            if (inputInfo.size() != 2) {
+                throw std::logic_error("Current version of Faster R-CNN accepts networks having two inputs: image_tensor and image_info");
             }
 
             // Output Blob
             auto outputInfo = exe_network.GetOutputsInfo();
-            // Faster R-CNN has two head: cls_score and bbox_pred
-            if (outputInfo.size() != 2) {
-                throw std::logic_error("Faster R-CNN must have two outputs: cls_score and bbox_pred");
+            // Faster R-CNN has two head: cls_score and bbox_pred; however they are all unified in a 
+            // detection output layer which do nms
+            if (outputInfo.size() != 1) {
+                throw std::logic_error("Faster R-CNN must have one outputs");
             }
             CDataPtr& output = outputInfo.begin()->second;
             const SizeVector outputDims = output->getTensorDesc().getDims();
@@ -742,6 +739,7 @@ namespace ie {
             }
         }
         std::vector<bbox> run_detection(const char* data, int size) override {
+            IO_sanity_check();
             std::vector<bbox> ret; // return value
             try {
                 std::chrono::time_point<std::chrono::system_clock> start;
