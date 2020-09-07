@@ -1,0 +1,16 @@
+{
+    "ip": "0.0.0.0",
+    "port": "8081",
+    "inference engines": [
+      {
+        "name": "yolov3",
+        "device": "fpga",
+        "model": "/home/canhld/workplace/InferenceServer/openvino_models/dota/yolo_v3_dota_fp16.xml",
+        "labels": "/home/canhld/workplace/InferenceServer/openvino_models/dota/dota_yolo.txt",
+        "fpga configuration": {
+          "dev": "acla0",
+          "bitstream": "/opt/intel/openvino_2019.1.144/bitstreams/a10_devkit_bitstreams/2019R1_A10DK_FP16_TinyYolo.aocx"
+        }
+      }
+    ]
+  }

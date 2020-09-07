@@ -160,7 +160,7 @@ namespace worker {
     class inference_worker : public worker {
     private:
         IEPtr Ie;                                           //!< pointer to inference engine
-        object_detection_mq<single_bell>::ptr TaskQueue;    //!< task queue, will get job in this queue
+        object_detection_mq<single_bell>::ptr taskq;    //!< task queue, will get job in this queue
     public:
         /**
          * @brief Construct a new inference worker object
@@ -171,13 +171,13 @@ namespace worker {
          * @brief Construct a new inference worker object
          * 
          * @param _Ie 
-         * @param _TaskQueue 
+         * @param _taskq 
          * @param _cv 
          * @param _mtx 
          * @param _key 
          */
-        inference_worker(IEPtr& _Ie, object_detection_mq<single_bell>::ptr& _TaskQueue):
-                        Ie(_Ie), TaskQueue(_TaskQueue)
+        inference_worker(IEPtr& _Ie, object_detection_mq<single_bell>::ptr& _taskq):
+                        Ie(_Ie), taskq(_taskq)
                         {
                             spdlog::info("Init inference worker!");
                         }
@@ -199,15 +199,15 @@ namespace worker {
             // start listening to the queue
             try {
                 for (;;) {
-                    spdlog::info("[IEW] Waiting for new task");
+                    spdlog::debug("[IEW] Waiting for new task");
                     //! find other way to do it
-                    auto m = TaskQueue->pop();
+                    auto m = taskq->pop();
                     // m.bell->lock();
-                    spdlog::info("[IEW] Invoke inference engine {}", TaskQueue->size());
+                    spdlog::info("[IEW] Invoke inference engine {}", taskq->size());
                     *m.predictions = Ie->run_detection(m.data, m.size);
-                    spdlog::info("[IEW] Done inferencing, predidiction size = {}", m.predictions->size());
+                    spdlog::debug("[IEW] Done inferencing, predidiction size = {}", m.predictions->size());
                     // Push to queue and notify the http_worker
-                    spdlog::info("[IEW] signaling request thread");
+                    spdlog::debug("[IEW] signaling request thread");
                     m.bell->ring(1);
                 }
             }
@@ -224,14 +224,12 @@ namespace worker {
      * it will create a newthread that run http worker class
      * 
      */
-    template<class IEPtr>
     class http_worker : public worker {
     private:
         tcp::acceptor& acceptor;                                //!< the acceptor, needed to init our socket
         tcp::socket sock{acceptor.get_executor()};              //!< the endpoint socket, passed from main thread
-        IEPtr Ie;                                               //!< pointer to inference engine in case we use CPU inference
         void *data;                                             //!< pointer to data, i.e dashboard
-        object_detection_mq<single_bell>::ptr TaskQueue;        //!< task queue
+        object_detection_mq<single_bell>::ptr taskq;        //!< task queue
         single_bell::ptr bell;                                  //!< notify bell
     public:
         /**
@@ -245,13 +243,12 @@ namespace worker {
          * 
          * @param _acceptor 
          * @param _sock 
-         * @param _Ie 
          * @param _data 
-         * @param _TaskQueue 
+         * @param _taskq 
          */
-        http_worker(tcp::acceptor& _acceptor, tcp::socket&& _sock, IEPtr _Ie, void *_data, 
-                    object_detection_mq<single_bell>::ptr& _TaskQueue):
-                    acceptor(_acceptor), sock(std::move(_sock)), Ie(_Ie), data(_data), TaskQueue(_TaskQueue)
+        http_worker(tcp::acceptor& _acceptor, tcp::socket&& _sock, void *_data, 
+                    object_detection_mq<single_bell>::ptr& _taskq):
+                    acceptor(_acceptor), sock(std::move(_sock)), data(_data), taskq(_taskq)
                     {
                         bell = std::make_shared<single_bell>();
                         spdlog::info("Init new http worker!");
@@ -397,19 +394,13 @@ namespace worker {
             int size = body.size();
             std::vector<bbox> prediction;
             // exception handling in run, no need to santiny check
-            if (Ie) {
-                // in this case, we can run IE ourself
-                prediction = Ie->run_detection(data,size);
-            }
-            else {
-                // need to pass to inference worker
-                obj_detection_msg<single_bell> m{data,size,&prediction,bell};
-                spdlog::debug("[HTTPW {}] enqueue my task {}", boost::lexical_cast<std::string>(std::this_thread::get_id()), TaskQueue->size());
-                TaskQueue->push(m);
-                spdlog::debug("[HTTPW {}] waiting for IEW", boost::lexical_cast<std::string>(std::this_thread::get_id()));
-                bell->wait(1);
-                spdlog::debug("[HTTPW {}] recieved data", boost::lexical_cast<std::string>(std::this_thread::get_id()));
-            }
+            // push to queue
+            obj_detection_msg<single_bell> m{data,size,&prediction,bell};
+            spdlog::debug("[HTTPW {}] enqueue my task {}", boost::lexical_cast<std::string>(std::this_thread::get_id()), taskq->size());
+            taskq->push(m);
+            spdlog::debug("[HTTPW {}] waiting for IEW", boost::lexical_cast<std::string>(std::this_thread::get_id()));
+            bell->wait(1);
+            spdlog::debug("[HTTPW {}] recieved data", boost::lexical_cast<std::string>(std::this_thread::get_id()));
             int n = prediction.size();
             // create property tree and write to json
             JSON res;                   // our response
@@ -596,11 +587,9 @@ namespace worker {
      * @brief listening worker that will listen to connection
      * 
      */
-    template<class IEPtr>
     class listen_worker {
     private: 
-        object_detection_mq<single_bell>::ptr TaskQueue;    //!< task queue
-        IEPtr Ie;                                           //!< pointer to inference engine
+        object_detection_mq<single_bell>::ptr taskq;    //!< task queue
 
     private:
         /**
@@ -625,7 +614,7 @@ namespace worker {
                 // launch new http worker to handle new request
                 // transfer ownership of socket to the worker
                 auto f = [&](tcp::socket& _sock){
-                    http_worker<IEPtr> httper{acceptor, std::move(_sock), Ie, nullptr,TaskQueue};
+                    http_worker httper{acceptor, std::move(_sock), nullptr,taskq};
                     httper();
                 };
                 std::thread{
@@ -639,25 +628,13 @@ namespace worker {
          * 
          */
         listen_worker() = delete;
-
         /**
          * @brief Construct a new listen worker object
          * 
-         * @param _TaskQueue 
-         * @param _Ie 
+         * @param _taskq 
          */
-        listen_worker(object_detection_mq<single_bell>::ptr& _TaskQueue,
-                    IEPtr& _Ie):
-                    TaskQueue(_TaskQueue), Ie(_Ie)
-                    {}
-
-        /**
-         * @brief Construct a new listen worker object
-         * 
-         * @param _TaskQueue 
-         */
-        listen_worker(object_detection_mq<single_bell>::ptr& _TaskQueue):
-                    TaskQueue(_TaskQueue)
+        listen_worker(object_detection_mq<single_bell>::ptr& _taskq):
+                    taskq(_taskq)
                     {}
         /**
          * @brief Destroy the listen worker object
@@ -689,16 +666,42 @@ namespace worker {
             pthread_setname_np(pthread_self(),"listen worker");
             listen(ip.c_str(),port.c_str());
         }
-
-        /**
-         * @brief 
-         * 
-         */
-        void destroy_ie() {
-            Ie = nullptr;
-        }
     }; //! class listen worker
 
+    /**
+     * @brief fused listening worker and http worker to one class
+     * @details this class is used in reactor mode
+     */
+    class fused_http_worker : public worker {
+    private:
+        
+        object_detection_mq<single_bell>:: cpu_taskq;
+
+    private:
+        void session_handler(tcP::socket&& sock) {
+            
+        }
+
+        void listen(const char* ip, const char *p) {
+            auto const address = net::ip::make_address(ip);
+            auto const port = static_cast<unsigned short>(std::stoi(p));
+            // the io_contex is required to all IO - boost asio implementation
+            net::io_context ioc{1}; // we have only 1 listening thread in sync model
+            // the acceptor that will recieve incomming request
+            cout << "Start accepting" << endl;
+            tcp::acceptor acceptor{ioc,{address,port}};
+            for(;;) {
+                // this socket will run 
+                tcp::socket sock{ioc};
+                // accep, blocking until new connection
+                acceptor.accept(sock);
+                // handler the request
+                session_handler(std::move(sock));
+            }
+        }
+    public:
+
+    };
     /**
      * @brief 
      * 

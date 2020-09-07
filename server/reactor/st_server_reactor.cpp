@@ -17,7 +17,7 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <stdlib.h> 
 #include "st_ultis.h"
-#include "st_sync_worker.h"
+#include "st_worker.h"
 #include "st_ie.h"
 #include "st_exception.h"
 namespace beast = boost::beast;         // from <boost/beast.hpp>
@@ -86,7 +86,7 @@ int main(int argc, char const *argv[])
         // Set the default logger to file logger
         auto file_logger = spdlog::basic_logger_mt("basic_logger", "logs/basic.txt");
         spdlog::set_default_logger(file_logger);
-        spdlog::set_level(spdlog::level::off);
+        spdlog::set_level(spdlog::level::info);
         spdlog::info("Log started!");
         // Check command line arguments.
         if (!parse_and_check_cmd_line(argc, const_cast<char**>(argv))) {
@@ -111,58 +111,101 @@ int main(int argc, char const *argv[])
         auto port = config.get<std::string>("port");
 
         // inference engine
-        std::vector<inference_engine::ptr> IEs;
+        bool fpga = false, gpu = false, cpu = false;
+        std::vector<inference_engine::ptr> cpu_ies;
+        std::vector<inference_engine::ptr> gpu_ies; // default: nvgpu
+        std::vector<inference_engine::ptr> fpga_ies;
+
         const auto &ie_array = config.get_child("inference engines");
         std::unordered_set<std::string> fpga_devs; 
         ie_factory factory;
+        // iterate over all devices
         for (auto it = ie_array.begin(); it != ie_array.end(); ++it) {
-            auto ie = it->second;
-            const std::string name = ie.get<std::string>("name");
-            const std::string &device = ie.get<std::string>("device");
-            const std::string &model = ie.get<std::string>("model");
+            // get the configuration of each device
+            auto conf = it->second;
+            const std::string device = conf.get<std::string>("device");
+            // get the models list, pass if there is no models
+            auto &model_list = conf.get_child("models");
+            if (model_list.size() == 0) continue;
+            // currently, one device can run only one models, so only get the begin
+            auto model = conf.begin()->second;
+            std::vector<inference_engine::ptr> tmp;
+            const std::string name = conf.get<std::string>("name");
+            // path to the model graph and weight
+            const std::string &graph = model.get<std::string>("graph");
             const std::string &labels = ie.get<std::string>("labels");
-            bool fpga = device.find("fpga") != std::string::npos;
-            if (fpga) {
-                auto &fpga_conf = ie.get_child("fpga configuration");
-                // fpga device number, cannot shared by now
-                const std::string &dev = fpga_conf.get<std::string>("dev");
-                if (fpga_devs.find(dev) != fpga_devs.end()) {
+            const int replicas = ie.get<std::string>("replicas");
+            bool is_fpga = device.find("fpga") != std::string::npos;
+            bool is_cpu = device.find("cpu") != std::string::npos;
+            bool is_gpu = device.find("nvgpu") != std::string::npos; // default nv gpu
+            if (is_fpga) {
+                // FPGA inference worker cannot run outside of main threads
+                // Therefore, current version of inference server can run at most
+                // one FPGA inference worker.
+                if (replicas > 1) {
                     throw fpga_overused();
                 }
-                fpga_devs.insert(dev);
                 // bitstream
                 const std::string &bitstream = fpga_conf.get<std::string>("bitstream");
                 // setenv("DLA_AOCX",bitstream.c_str(),0);
                 setenv("CL_CONTEXT_COMPILER_MODE_INTELFPGA","3",0);
             }
+            // create inference engines
             auto mcode = factory.str2mcode(name);
-            auto dcode = factory.str2dcode(device);
-            IEs.push_back(factory.create_inference_engin(mcode,dcode,model,labels));
+            auto dcode = factory.str2dcode(name);
+            for (int i = 0; i < replicas; ++i) {
+                tmp.push_back(factory.create_inference_engin(type,dcode,model,labels));
+            }
+            if (is_fpga) {
+                fpga_ies = std::move(tmp);
+            }
+            if (is_cpu) {
+                cpu_ies = std::move(tmp);
+            }
+            if (is_gpu) {
+                gpu_ies = std::move(tmp);
+            }
         }
 
-        // task queue - Not necessary used with CPU inference
-        object_detection_mq<single_bell>::ptr TaskQueue = std::make_shared<object_detection_mq<single_bell>>();
+        // task queue
+        bool cpu = cpu_ies.size() > 0;
+        bool fpga = fpga_ies.size() > 0;
+        bool gpu = gpu_ies.size() > 0;
+        object_detection_mq<single_bell>::ptr cpu_taskq = cpu ?
+                                                        std::make_shared<object_detection_mq<single_bell>>() :
+                                                        nullptr;
+        object_detection_mq<single_bell>::ptr gpu_taskq = gpu ?
+                                                        std::make_shared<object_detection_mq<single_bell>>() :
+                                                        nullptr;
+        object_detection_mq<single_bell>::ptr fpga_taskq = fpga ?
+                                                        std::make_shared<object_detection_mq<single_bell>>() :
+                                                        nullptr;
         
-        // listening worker
-        sync_listen_worker listener{TaskQueue};
-
-        // inference work group
+        // vector of fused listening worker
+        listen_worker<inference_engine::ptr> listener{cpu_taskq};
         std::thread{std::bind(listener,ip,port)}.detach();
 
-        // FPGA inference worker cannot run outside of main threads
-        // Therefore, current version of inference server can run at most
-        // one FPGA inference worker. By convention, we assume that if there
-        // is a FPGA inferencer, it would be the first IE in the configuration
-        // file
-        int num_workers = IEs.size() - 1;
-        std::vector<std::thread> ie_workers(num_workers);
-        for (int i = 0; i < num_workers; ++i) {
-            sync_inference_worker<inference_engine::ptr> inferencer{IEs[i+1], TaskQueue};
-            ie_workers[i] = std::thread{std::bind(inferencer)};
-            ie_workers[i].detach();
+        // cpu inference work group   
+        int cpu_num_workers = cpu_ies.size();
+        std::vector<std::thread> cpu_ie_workers(num_workers);
+        for (int i = 0; i < cpu_num_workers; ++i) {
+            inference_worker<inference_engine::ptr> inferencer{cpu_ies[i], cpu_taskq};
+            cpu_ie_workers[i] = std::thread{std::bind(inferencer)};
+            cpu_ie_workers[i].detach();
         }
-        sync_inference_worker<inference_engine::ptr> inferencer{IEs[0], TaskQueue};
-        inferencer();
+        // gpu inference work group
+        int gpu_num_workers = gpu_ies.size();
+        std::vector<std::thread> gpu_ie_workers(num_workers);
+        for (int i = 0; i < gpu_num_workers; ++i) {
+            inference_worker<inference_engine::ptr> inferencer{gpu_ies[i], gpu_taskq};
+            gpu_ie_workers[i] = std::thread{std::bind(inferencer)};
+            gpu_ie_workers[i].detach();
+        }
+        // fpga inference in the main threads
+        if (fpga) {
+            inference_worker<inference_engine::ptr> inferencer{fpga_ies[0], fpga_taskq};
+            inferencer();
+        }
     }
     catch(const std::exception& e)
     {

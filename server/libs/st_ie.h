@@ -871,39 +871,73 @@ namespace ie {
          * @brief 
          * 
          */
-        enum ie_type {
+        enum model_code {
             SSD = 0,
             YOLOv3 = 1,
             RCNN = 2,
         };
-        ie_type str2type(const std::string& model_name) {
+        enum device_code {
+            CPU = 0,
+            FPGA = 1,
+            GPU = 2,
+        };
+        model_code str2mcode(const std::string& model_name) {
             std::string name(model_name);
             std::transform(model_name.begin(), model_name.end(), name.begin(),
                            [](unsigned char c) {return std::tolower(c);});
             if (name == "ssd") {
-                return ie_type::SSD;
+                return model_code::SSD;
             }
             else if (name == "yolov3") {
-                return ie_type::YOLOv3;
+                return model_code::YOLOv3;
             }
             else if (name == "rcnn") {
-                return ie_type::RCNN;
+                return model_code::RCNN;
             }
             else {
                 throw st::exception::ie_not_implemented();
             }
         }
-        inference_engine::ptr create_inference_engin(ie_type type, const std::string &device, 
+        device_code str2dcode(const std::string& device) {
+            std::string dev(device);
+            std::transform(device.begin(), device.end(), dev.begin(),
+                           [](unsigned char c) {return std::tolower(c);});
+            if (dev == "cpu") {
+                return device_code::CPU;
+            }
+            else if (dev == "fpga") {
+                return device_code::FPGA;
+            }
+            else if (dev == "gpu") {
+                return device_code::GPU;
+            }
+            else {
+                throw st::exception::ie_not_implemented();
+            }
+        }
+        inference_engine::ptr create_inference_engin(model_code type, device_code dev, 
                                                      const std::string& model, const std::string& label) {
+            std::string plugin;
+            switch (dev) {
+            case device_code::CPU :
+                plugin = "CPU";
+                break;
+            case device_code::FPGA :
+                plugin = "HETERO:FPGA,CPU";
+                break;
+            default:
+                throw st::exception::ie_not_implemented();
+                break;
+            }
             switch (type) {
-            case ie_type::SSD :
-                return  std::make_shared<ssd>(device,model,label);
+            case model_code::SSD :
+                return  std::make_shared<ssd>(plugin,model,label);
                 break;
-            case ie_type::YOLOv3 :
-                return std::make_shared<yolo>(device,model,label);
+            case model_code::YOLOv3 :
+                return std::make_shared<yolo>(plugin,model,label);
                 break;
-            case ie_type::RCNN :
-                return std::make_shared<faster_r_cnn>(device,model,label);
+            case model_code::RCNN :
+                return std::make_shared<faster_r_cnn>(plugin,model,label);
                 break;
             default :
                 throw st::exception::ie_not_implemented();

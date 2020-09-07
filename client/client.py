@@ -3,25 +3,73 @@ import sys
 import json
 from PIL import Image, ImageFont, ImageDraw, ImageEnhance
 
-headers = {'Content-Type': 'image/jpeg'}
-body = open(sys.argv[1],'rb')
+# header must specify content-type is image/xxx
+# can be any type of images, but it should perfectly be jpeg file with size < 1MB
+# I'm setting max reading file from socket is 1MB, there are a bug make reading > 1M 
+# file take long time
 
-conn = http.client.HTTPConnection(sys.argv[2])
+headers = {'Content-Type': 'image/jpeg'}
+
+# No need to decode, just read the raw byte and send
+body = open(sys.argv[1],'rb')
+ip = sys.argv[2]
+port = sys.argv[3]
+conn = http.client.HTTPConnection(ip+":"+port)
+
+# POST to /inference with body is the image
 conn.request('POST','/inference', body, headers)
 res = conn.getresponse()
-
 jsondata = res.read()
 
+# Parse response
 data = json.loads(jsondata.decode('utf-8'))
 im = Image.open(body)
 draw = ImageDraw.Draw(im)
 for p in data["predictions"]:
+    label_id = p["label_id"]
     label = p["label"]
-    score = p["confidences"]
+    score = float(p["confidences"])
     bbox = p["detection_box"]
     tl = (int(bbox[0]),int(bbox[1]))
     br = (int(bbox[2]),int(bbox[3]))
     draw.rectangle((tl,br),outline = "red", width = 3)
-    draw.text((int(bbox[0]),int(bbox[1])-10), label + " " + str(score))
+    draw.text((int(bbox[0]),int(bbox[1])-10), label + " " + str(round(score,2)))
 
-im.save("testing.jpg","JPEG")
+im.save("testing.jpg","jpeg")
+
+
+"""
+Response format:
+
+- `label_id`: label_id
+- `label`: label name
+- `confidences`: confidence of the detection
+- `detection_box`: detection box `x_min,y_min,x_max,y_max` with `top_left` of the image is `(0,0)`
+
+```json
+{
+  "status": "ok",
+  "predictions": [
+    {
+      "label_id": "3",
+      "label": "car",
+      "confidences": "0.905718684",
+      "detection_box": ["1176", "723", "1232", "750"]
+    },
+    {
+      "label_id": "3",
+      "label": "car",
+      "confidences": "0.787045956",
+      "detection_box": ["301", "725", "346", "752"]
+    },
+    {
+      "label_id": "3",
+      "label": "car",
+      "confidences": "0.647054553",
+      "detection_box": ["1169", "449", "1228", "476"]
+    }
+  ]
+}
+```
+
+"""

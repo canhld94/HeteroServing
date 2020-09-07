@@ -1,10 +1,10 @@
 {
     "ip": "0.0.0.0",
-    "port": "8080",
-    "inference engine": [
+    "port": "8081",
+    "inference engines": [
       {
-        "name": "RCNN",
-        "device": "CPU",
+        "name": "rcnn",
+        "device": "fpga",
         "model": "/home/canhld/workplace/InferenceServer/openvino_models/faster_rcnn_fp32.xml",
         "labels": "/home/canhld/workplace/InferenceServer/openvino_models/ms_coco_91.txt",
         "fpga configuration": {

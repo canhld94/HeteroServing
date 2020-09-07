@@ -1,0 +1,12 @@
+{
+    "ip": "0.0.0.0",
+    "port": "8081",
+    "inference engines": [
+      {
+        "name": "yolov3",
+        "device": "cpu",
+        "model": "/home/canhld/workplace/InferenceServer/openvino_models/dota/yolo_v3_dota_fp32.xml",
+        "labels": "/home/canhld/workplace/InferenceServer/openvino_models/dota/dota_yolo.txt"
+      }
+    ]
+  }
