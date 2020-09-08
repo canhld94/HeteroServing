@@ -2,11 +2,11 @@
 
 ## Introduction
 
-This project build an inferecen server with OpenVino FPGA backend. Currently only support object detection with SSD and YoLov3. Faster R-CNN is comming soon
+This project build an inferecen server with OpenVino FPGA backend. Currently only support object detection with `SSD`, `YoLov3`, and `Faster R-CNN` family
 
 ## Requirements
 
-Dependencies
+The project depends on folowing packages. You need to install OpenVino, following the instruction on Intel site. For the others, you can install them manually, but I strongly recomend install them with `Conan`, so you do not need to modify the CMake files.
 
 ```
 openvino==2019R1.1: deep learning framework
@@ -16,15 +16,13 @@ glfags==2.2.2: argv parsing
 gtest==1.10.0: testing
 ```
 
-The following package are required to build the project. Note that even this could run with GCC5, sometime when you run the server with FPGA under high 
+The following package are required to build the project. Note that even this could run with GCC5, sometime when you run the server with FPGA under high load. If you don't want to use conan, mannually add cmake modules to the CMake files.
 
 ```
 GCC>=5
 CMake>=3.13
 Conan
 ```
-
-If you don't want to use conan, mannually add cmake modules to the Cmake files.
 
 ## Directory structure
 
@@ -74,5 +72,5 @@ cd bin
 3. On another terminal, go to run client folder and run client, the result will be written to file "testing.jpg"
 
 ```SH
-python client.py <path to your image> <ip:port>
+python client.py <path to your image> <ip> <port>
 ```

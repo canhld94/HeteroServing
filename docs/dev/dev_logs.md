@@ -1,60 +1,30 @@
-# MEC Inferecne Server ![CMake CI](https://github.com/canhld94/mec-inference-server/workflows/CMake%20CI/badge.svg)
-
-1. What is this project?  
-This project build the demo for MEC project in 2020. The main objective is building an FPGA inference server running deep learning algorithms on Intel FPGA and expose RESTful APIs to users.
-
-2. Important notes  
-
-- Language: C++  
-- Build Tool: CMake  
-- Package Manager: Conan  
-- APIs Spec: OpenAPI 3.0.0
-- Dependencies:
-
-  - OpenVino: deep learning framework
-  - Boost: socket and IPC, networking, HTTP parsing and serializing, JSON parsing and serializing
-  - GFlags: argv parsing
-  - GTest: testing
-  - Intel Thread Building Block: concurrency queues
-
-3. Directory structure
-
-```Text
-demo_apps/
-├── bin                                       // Binary
-│   └── lib
-├── build                                     // Build directory
-│   ├── client_server_beast
-│   ├── CMakeFiles
-│   ├── format_reader
-│   ├── intel64
-│   └── ssd_standalone
-├── client_server_beast                       // Testing server
-│   ├── docs
-│   ├── http
-│   └── ws
-├── cmake-modules                             // CMAKE modules
-├── common                                    // Common headers
-│   ├── os
-│   ├── samples
-│   └── ultis
-├── format_reader                             // Lib format_reader from intel, better don't touch
-├── ssd_inference_server                      // SSD Inference server
-└── ssd_standalone                            // Standalone SSD inference application running on FPGA
-
-```
+# Dev Logs
 
 What have been done and what to learn up to
 
+## ---- 2020 / 09 / 07 ----
+
+- __What've been done__
+  - Fix minor bugs and finishing the parallel server; it's quite stable and can run for beta testing now
+  - Define the routine of reactor server
+
+- _Problem_:
+  - Parallel server can run only 1 models on all devices
+
+- __Backlog__:
+  - Implement reactor models that support running different models on different devices
+
+- __Roadmap__:
+  - Adding support for NVIDIA  TensorRT
 
 ## ---- 2020 / 08 / 27 ----
 
 - _Problem_:
-  - Faster RCNN output parsing is quite compilcated, specially in the current version of OpenVino
+  - Faster RCNN output parsing is quite compilcated, specially in the current version of OpenVino _Solved_
   
 - __Backlog__:
-  - Implement Faster RCNN
-  - Check whether general Faster RCNN model can be converted to OpenVino Model or not (compute graph)
+  - Implement Faster RCNN _done_
+  - Check whether general Faster RCNN model can be converted to OpenVino Model or not (compute graph) _done_
 
 - __Road map__:
   - Implement Reactor model _*important_
