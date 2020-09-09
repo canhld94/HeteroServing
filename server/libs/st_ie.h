@@ -829,13 +829,6 @@ namespace ie {
         using ptr = std::shared_ptr<faster_r_cnn>;
     };
 
-    /**
-     * @brief 
-     * 
-     */
-    class classification : public inference_engine {
-
-    };
 
     /**
      * @brief 
@@ -849,16 +842,16 @@ namespace ie {
      * @brief 
      * 
      */
-    class segmentation : public inference_engine {
-        
+    class mask_r_cnn :  public inference_engine {
+
     };
 
     /**
      * @brief 
      * 
      */
-    class mask_r_cnn :  public inference_engine {
-
+    class fcn16 :  public inference_engine {
+        
     };
 
     /**
