@@ -2,6 +2,12 @@
 
 What have been done and what to learn up to
 
+## ---- 2020 / 09 / 09 ----
+
+- __Backlog__:
+  - Add FCN16s to model server
+  - Implement reactor models that support running different models on different devices
+
 ## ---- 2020 / 09 / 07 ----
 
 - __What've been done__
