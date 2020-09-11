@@ -70,8 +70,8 @@ include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup()
 
 # Project components
-# add_subdirectory(server)
-add_subdirectory(fcn16s)
+add_subdirectory(server)
+# add_subdirectory(fcn16s)
 
 # Install to root
 set (CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_SOURCE_DIR})

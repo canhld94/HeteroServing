@@ -266,6 +266,18 @@ namespace sync {
             cv.notify_one();
         }
         /**
+         * @brief Push an rvalue item to queue
+         * 
+         * @param item 
+         */
+        void push(const Message&& item) {
+            {
+                Lock lk{mtx};
+                queue.push_back(item);
+            }
+            cv.notify_one();
+        }
+        /**
          * @brief Pop an item from queue
          * 
          * @return Message 

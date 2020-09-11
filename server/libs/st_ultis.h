@@ -16,6 +16,88 @@
 #include <string>
 #include <cstdlib>
 #include <chrono>
+#include <boost/beast/core.hpp>
+#include <boost/beast/http.hpp>
+#include <boost/beast/version.hpp>
+
+namespace beast = boost::beast;         // from <boost/beast.hpp>
+namespace http = beast::http;           // from <boost/beast/http.hpp>
+using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
+using beast_basic_request = http::request<http::string_body>;
+using beast_basic_response = http::response<http::string_body>;
+using beast_empty_response = http::response<http::empty_body>;
+
+/**
+ * @brief This is the C++11 equivalent of a generic lambda. 
+ * function object is used to send an HTTP message. 
+*/
+template<class Stream>
+struct send_lambda {
+    Stream& stream_;
+    bool& close_;
+    beast::error_code& ec_;
+
+    explicit
+    send_lambda(
+        Stream& stream,
+        bool& close,
+        beast::error_code& ec)
+        : stream_(stream)
+        , close_(close)
+        , ec_(ec)
+    { }
+
+    template<bool isRequest, class Body, class Fields>
+    void
+    operator()(http::message<isRequest, Body, Fields>&& msg) const {
+        // Determine if we should close the connection after
+        close_ = msg.need_eof();
+
+        // We need the serializer here because the serializer requires
+        // a non-const file_body, and the message oriented version of
+        // http::write only works with const messages.
+        http::serializer<isRequest, Body, Fields> sr{msg};
+        http::write(stream_, sr, ec_);
+    }
+};
+
+/**
+ * @brief Return mime_type base on the path of the string
+*/
+beast::string_view
+mime_type(beast::string_view path) {
+    using beast::iequals;
+    auto const ext = [&path] {
+        auto const pos = path.rfind(".");
+        if(pos == beast::string_view::npos)
+            return beast::string_view{};
+        return path.substr(pos);
+    }();
+    if(iequals(ext, ".htm"))  return "text/html";
+    if(iequals(ext, ".html")) return "text/html";
+    if(iequals(ext, ".php"))  return "text/html";
+    if(iequals(ext, ".css"))  return "text/css";
+    if(iequals(ext, ".txt"))  return "text/plain";
+    if(iequals(ext, ".js"))   return "application/javascript";
+    if(iequals(ext, ".json")) return "application/json";
+    if(iequals(ext, ".xml"))  return "application/xml";
+    if(iequals(ext, ".swf"))  return "application/x-shockwave-flash";
+    if(iequals(ext, ".flv"))  return "video/x-flv";
+    if(iequals(ext, ".png"))  return "image/png";
+    if(iequals(ext, ".jpe"))  return "image/jpeg";
+    if(iequals(ext, ".jpeg")) return "image/jpeg";
+    if(iequals(ext, ".jpg"))  return "image/jpeg";
+    if(iequals(ext, ".gif"))  return "image/gif";
+    if(iequals(ext, ".bmp"))  return "image/bmp";
+    if(iequals(ext, ".ico"))  return "image/vnd.microsoft.icon";
+    if(iequals(ext, ".tiff")) return "image/tiff";
+    if(iequals(ext, ".tif"))  return "image/tiff";
+    if(iequals(ext, ".svg"))  return "image/svg+xml";
+    if(iequals(ext, ".svgz")) return "image/svg+xml";
+    return "application/text";
+}
+
+
 
 // Hacker way to measure time
 //! DON'T use it recursively. If you do it recursively, only read the innermost result

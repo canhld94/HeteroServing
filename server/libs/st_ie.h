@@ -158,7 +158,7 @@ namespace ie {
          */
         void init_plugin(const std::string& device) {
             log->info("Init new {} plugin",device);
-            std::cout << "Inference Engine version: " << GetInferenceEngineVersion() << endl;
+            std::cout << "Inference Engine version: " << GetInferenceEngineVersion() << std::endl;
             // Loading Plugin
             plugin = PluginDispatcher().getPluginByDevice(device);
             // Adding CPU extension
@@ -265,7 +265,7 @@ namespace ie {
         void init_IO(Precision p, InferenceEngine::Layout layout) override {
             auto inputInfo = InputsDataMap(network.getInputsInfo());
             InputInfo::Ptr& input = inputInfo.begin()->second;
-            std::cout << inputInfo.begin()->first << endl;
+            std::cout << inputInfo.begin()->first << std::endl;
             input->setPrecision(p);
             input->getInputData()->setLayout(layout);
         }
@@ -280,7 +280,7 @@ namespace ie {
             std::ostringstream ss;
             ss << "IELog" << rand();
             std::string log_name = ss.str();
-            std::cout << log_name << endl;
+            std::cout << log_name << std::endl;
             log = spdlog::basic_logger_mt(log_name.c_str(),"logs/IE.txt");
             log->set_pattern("[%H:%M:%S %z] [%n] [%^---%L---%$] [thread %t] %v");
             log->info("Log started!");
@@ -496,7 +496,7 @@ namespace ie {
             try { anchors = layer->GetParamAsFloats("anchors"); } catch (...) {}
             auto side = out_blob_h;
             int anchor_offset = 0;
-            std::cout << side << endl;
+            std::cout << side << std::endl;
             switch (side) {
                 case 13:
                     anchor_offset = 2 * 6;
@@ -549,7 +549,7 @@ namespace ie {
         void init_IO(Precision p, InferenceEngine::Layout layout) override {
             auto inputInfo = InputsDataMap(network.getInputsInfo());
             InputInfo::Ptr& input = inputInfo.begin()->second;
-            std::cout << inputInfo.begin()->first << endl;
+            std::cout << inputInfo.begin()->first << std::endl;
             input->setPrecision(p);
             input->getInputData()->setLayout(layout);
         }
@@ -564,7 +564,7 @@ namespace ie {
             std::ostringstream ss;
             ss << "IELog" << rand();
             std::string log_name = ss.str();
-            std::cout << log_name << endl;
+            std::cout << log_name << std::endl;
             log = spdlog::basic_logger_mt(log_name.c_str(),"logs/IE.txt");
             log->set_pattern("[%H:%M:%S %z] [%n] [%^---%L---%$] [thread %t] %v");
             log->info("Log started!");
@@ -703,7 +703,7 @@ namespace ie {
             std::ostringstream ss;
             ss << "IELog" << rand();
             std::string log_name = ss.str();
-            std::cout << log_name << endl;
+            std::cout << log_name << std::endl;
             log = spdlog::basic_logger_mt(log_name.c_str(),"logs/IE.txt");
             log->set_pattern("[%H:%M:%S %z] [%n] [%^---%L---%$] [thread %t] %v");
             log->info("Log started!");

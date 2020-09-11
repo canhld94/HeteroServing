@@ -5,9 +5,6 @@
  ***************************************************************************************/
 
 #pragma once 
-#include <boost/beast/core.hpp>
-#include <boost/beast/http.hpp>
-#include <boost/beast/version.hpp>
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/config.hpp>
@@ -22,7 +19,6 @@
 #include <thread>
 #include <vector>
 #include <sstream>
-#include <fstream>
 #include <chrono>
 #include <ctime>
 #include <mutex>
@@ -36,9 +32,6 @@ namespace net = boost::asio;            // from <boost/asio.hpp>
 namespace bpt = boost::property_tree;   // from <boots/property_tree>
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 typedef bpt::ptree JSON;                // just hiding the ugly name
-using std::cout;
-using std::endl;
-using std::ofstream;
 
 #include "st_ultis.h"
 #include "st_ie.h"
@@ -49,84 +42,7 @@ namespace worker {
     using st::ie::bbox;
     using namespace st::sync;
     /**
-     * @brief This is the C++11 equivalent of a generic lambda. 
-     * function object is used to send an HTTP message. 
-    */
-    template<class Stream>
-    struct send_lambda
-    {
-        Stream& stream_;
-        bool& close_;
-        beast::error_code& ec_;
-
-        explicit
-        send_lambda(
-            Stream& stream,
-            bool& close,
-            beast::error_code& ec)
-            : stream_(stream)
-            , close_(close)
-            , ec_(ec)
-        {
-        }
-
-        template<bool isRequest, class Body, class Fields>
-        void
-        operator()(http::message<isRequest, Body, Fields>&& msg) const
-        {
-            // Determine if we should close the connection after
-            close_ = msg.need_eof();
-
-            // We need the serializer here because the serializer requires
-            // a non-const file_body, and the message oriented version of
-            // http::write only works with const messages.
-            http::serializer<isRequest, Body, Fields> sr{msg};
-            http::write(stream_, sr, ec_);
-        }
-    };
-
-    /**
-     * @brief Return mime_type base on the path of the string
-    */
-
-    beast::string_view
-    mime_type(beast::string_view path)
-    {
-        using beast::iequals;
-        auto const ext = [&path]
-        {
-            auto const pos = path.rfind(".");
-            if(pos == beast::string_view::npos)
-                return beast::string_view{};
-            return path.substr(pos);
-        }();
-        if(iequals(ext, ".htm"))  return "text/html";
-        if(iequals(ext, ".html")) return "text/html";
-        if(iequals(ext, ".php"))  return "text/html";
-        if(iequals(ext, ".css"))  return "text/css";
-        if(iequals(ext, ".txt"))  return "text/plain";
-        if(iequals(ext, ".js"))   return "application/javascript";
-        if(iequals(ext, ".json")) return "application/json";
-        if(iequals(ext, ".xml"))  return "application/xml";
-        if(iequals(ext, ".swf"))  return "application/x-shockwave-flash";
-        if(iequals(ext, ".flv"))  return "video/x-flv";
-        if(iequals(ext, ".png"))  return "image/png";
-        if(iequals(ext, ".jpe"))  return "image/jpeg";
-        if(iequals(ext, ".jpeg")) return "image/jpeg";
-        if(iequals(ext, ".jpg"))  return "image/jpeg";
-        if(iequals(ext, ".gif"))  return "image/gif";
-        if(iequals(ext, ".bmp"))  return "image/bmp";
-        if(iequals(ext, ".ico"))  return "image/vnd.microsoft.icon";
-        if(iequals(ext, ".tiff")) return "image/tiff";
-        if(iequals(ext, ".tif"))  return "image/tiff";
-        if(iequals(ext, ".svg"))  return "image/svg+xml";
-        if(iequals(ext, ".svgz")) return "image/svg+xml";
-        return "application/text";
-    }
-
-    /**
      * @brief pure abstract worker thread
-     * TODO: add logger
     */
     class sync_worker {
     public:
@@ -160,7 +76,7 @@ namespace worker {
     class sync_inference_worker : public sync_worker {
     private:
         IEPtr Ie;                                           //!< pointer to inference engine
-        object_detection_mq<single_bell>::ptr taskq;    //!< task queue, will get job in this queue
+        object_detection_mq<single_bell>::ptr taskq;        //!< task queue, will get job in this queue
     public:
         /**
          * @brief Construct a new inference worker object
@@ -200,9 +116,7 @@ namespace worker {
             try {
                 for (;;) {
                     spdlog::debug("[IEW] Waiting for new task");
-                    //! find other way to do it
                     auto m = taskq->pop();
-                    // m.bell->lock();
                     spdlog::info("[IEW] Invoke inference engine {}", taskq->size());
                     *m.predictions = Ie->run_detection(m.data, m.size);
                     spdlog::debug("[IEW] Done inferencing, predidiction size = {}", m.predictions->size());
@@ -229,7 +143,7 @@ namespace worker {
         tcp::acceptor& acceptor;                                //!< the acceptor, needed to init our socket
         tcp::socket sock{acceptor.get_executor()};              //!< the endpoint socket, passed from main thread
         void *data;                                             //!< pointer to data, i.e dashboard
-        object_detection_mq<single_bell>::ptr taskq;        //!< task queue
+        object_detection_mq<single_bell>::ptr taskq;            //!< task queue
         single_bell::ptr bell;                                  //!< notify bell
     public:
         /**
@@ -281,10 +195,9 @@ namespace worker {
         * @param why 
         * @return http::response<http::string_body> 
         */
-        template <class Body, class Alocator>
         http::response<http::string_body> 
-        error_message(http::request<Body, http::basic_fields<Alocator>> &req, http::status status, beast::string_view why) {
-            http::response<http::string_body> res{status, req.version()};
+        error_message(beast_basic_request &req, http::status status, beast::string_view why) {
+            beast_basic_response res{status, req.version()};
             res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
             res.set(http::field::content_type, "text/html");
             res.keep_alive(req.keep_alive());
@@ -372,12 +285,10 @@ namespace worker {
         /**
          * @brief This funtion handles the inference request at POST /inference
          * ?All request return string body, so its return type is std::string should we format it with JSON?
-         * TODO: Implement the handler to work with image data 
          */
 
-        template <class Body, class Allocator>
         std::string 
-        inference_request_handler (http::request<Body,http::basic_fields<Allocator>> & req) {
+        inference_request_handler (beast_basic_request & req) {
             // we know this is the post method
             // now, first extact the content-type
 
@@ -442,8 +353,8 @@ namespace worker {
          * @param sender 
          * @return * Request 
          */
-        template <class Body, class Allocator, class Send>
-        void request_handler (http::request<Body, http::basic_fields<Allocator>>&& req, Send& sender) {
+        template <class Send>
+        void request_handler (beast_basic_request&& req, Send& sender) {
             // Make sure we can handle the method
             if( req.method() != http::verb::get &&
                 req.method() != http::verb::head &&
@@ -471,7 +382,7 @@ namespace worker {
             // Respond to HEAD request, alway just send the basic information of the server
             if(req.method() == http::verb::head)
             {
-                http::response<http::empty_body> res{http::status::ok, req.version()};
+                beast_empty_response res{http::status::ok, req.version()};
                 res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
                 res.set(http::field::content_type, mime_type(target));
                 res.content_length(0);
@@ -491,7 +402,7 @@ namespace worker {
                 }
                 // Cache the size since we need it after the move
                 auto const size = body.size();
-                http::response<http::string_body> res{
+                beast_basic_response res{
                     std::piecewise_construct,
                     std::make_tuple(std::move(body)),
                     std::make_tuple(http::status::ok, req.version())};
@@ -501,7 +412,7 @@ namespace worker {
                 res.keep_alive(req.keep_alive());
                 return sender(std::move(res));
             }
-            else { 
+            else {
                 // Respond to POST request
                 if (target == "inference") {
                     body = inference_request_handler(req);
@@ -511,7 +422,7 @@ namespace worker {
                 }
                 // Cache the size since we need it after the move
                 auto const size = body.size();
-                http::response<http::string_body> res{
+                beast_basic_response res{
                     std::piecewise_construct,
                     std::make_tuple(std::move(body)),
                     std::make_tuple(http::status::ok, req.version())};
@@ -551,8 +462,8 @@ namespace worker {
 
             for (;;) {
                 // read from socket
-                PROFILE_RELEASE("Read From Socket",
-                    http::request<http::string_body> req;
+                PROFILE_DEBUG("Read From Socket",
+                    beast_basic_request req;
                     http::read(sock, buffer, req, ec);
                 );
                 // if read indicates end of stream, stop reading
@@ -564,7 +475,7 @@ namespace worker {
                     return fail(ec,"read");
                 }
                 // handle request
-                PROFILE_RELEASE("Handle Request",
+                PROFILE_DEBUG("Handle Request",
                     request_handler(std::move(req),sender);
                 );
                 // handler write error report by sender
@@ -604,7 +515,7 @@ namespace worker {
             // the io_contex is required to all IO - boost asio implementation
             net::io_context ioc{1}; // we have only 1 listening thread in sync model
             // the acceptor that will recieve incomming request
-            cout << "Start accepting" << endl;
+            std::cout << "Start accepting" << std::endl;
             tcp::acceptor acceptor{ioc,{address,port}};
             for(;;) {
                 // this socket will run 
@@ -651,7 +562,7 @@ namespace worker {
         void operator()() {
             pthread_setname_np(pthread_self(),"listen worker");
             std::cout << "Warning: no IP and address is provide" << std::endl;
-            std::cout << "Use defaul address 0.0.0.0 and default port 8080" << std:: endl;
+            std::cout << "Use defaul address 0.0.0.0 and default port 8080" << std::endl;
             listen("0.0.0.0","8080");
 
         }

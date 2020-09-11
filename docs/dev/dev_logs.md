@@ -2,6 +2,30 @@
 
 What have been done and what to learn up to
 
+## ---- 2020 / 09 / 11 ----
+
+- __What've been done__
+  - Fix the structure of reactor server: listening -> http parser -> inference -> sender
+
+- _Problem_:
+  - Queue type between inference and sender
+  - Inference will response to sender the output blob as well as the parser, but the parser
+  is a method of the inference engine. If we wrap it with std::function, the queue may
+  possibly be couple to one type of inference engine, which is just bad.
+
+- __Backlog__:
+  - Implement reactor models that support running different models on different devices
+  - Add FCN16s to model server
+  - Add Faster RCNN DOTA to model server
+
+
+## ---- 2020 / 09 / 10 ----
+
+- __Backlog__:
+  - Add FCN16s to model server
+  - Add Faster RCNN DOTA to model server
+  - Implement reactor models that support running different models on different devices
+
 ## ---- 2020 / 09 / 09 ----
 
 - __Backlog__:
