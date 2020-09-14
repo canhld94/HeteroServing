@@ -18,7 +18,7 @@
 #include <stdlib.h> 
 #include "st_ultis.h"
 #include "st_async_worker.h"
-#include "st_ie.h"
+#include "st_ie2.h"
 #include "st_exception.h"
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
@@ -166,30 +166,45 @@ int main(int argc, char const *argv[])
                 gpu_ies = std::move(tmp);
             }
         }
-
-        // task queue
+        // queue init
+        // listening queue - 1
+        connection_mq::ptr connq = std::make_shared<connection_mq>();
+        // task queue - max 3
         bool cpu = cpu_ies.size() > 0;
         bool fpga = fpga_ies.size() > 0;
         bool gpu = gpu_ies.size() > 0;
-        object_detection_mq<single_bell>::ptr cpu_taskq = cpu ?
-                                                        std::make_shared<object_detection_mq<single_bell>>() :
-                                                        nullptr;
-        object_detection_mq<single_bell>::ptr gpu_taskq = gpu ?
-                                                        std::make_shared<object_detection_mq<single_bell>>() :
-                                                        nullptr;
-        object_detection_mq<single_bell>::ptr fpga_taskq = fpga ?
-                                                        std::make_shared<object_detection_mq<single_bell>>() :
-                                                        nullptr;
-        
-        // vector of fused listening worker
-        listen_worker<inference_engine::ptr> listener{cpu_taskq};
-        std::thread{std::bind(listener,ip,port)}.detach();
+        http_mq::ptr cpu_taskq = cpu ? std::make_shared<http_mq::ptr>() : nullptr;
+        http_mq::ptr gpu_taskq = gpu ? std::make_shared<http_mq::ptr>() : nullptr;
+        http_mq::ptr fpga_taskq = fpga ? std::make_shared<http_mq::ptr>() : nullptr;
+        // response queue - 1
+        response_queue::ptr resq = std::make_shared<response_queue>();
 
+        // spawn the listening workers - 3
+        async_listening_worker listeners{conn,ip,port,3};
+        std::thread{std::bind(listener)}.detach();
+
+        // spwan the http workers
+        int num_http_workers = 3;
+        std::vector<async_http_worker> http_workers(num_http_workers);
+        for (int i = 0;  i < num_http_workers; ++i) {
+            async_http_worker worker{connq,cpu_taskq,fpga_taskq,gpu_taskq};
+            http_workers[i] = std::thread{std::bind(worker)};
+            http_workers[i].detach();
+        }
+        // spwan the pp workers
+        int num_pp_workers = 3;
+        std::vector<std::thread> pp_workers(num_pp_workers);
+        for (int i = 0;  i < num_pp_workers; ++i) {
+            async_pp_worker worker{resq};
+            pp_workers[i] = std::thread{std::bind(worker)};
+            pp_worker[i].detach();
+        }
+        // spawn the infrence workers
         // cpu inference work group   
         int cpu_num_workers = cpu_ies.size();
         std::vector<std::thread> cpu_ie_workers(num_workers);
         for (int i = 0; i < cpu_num_workers; ++i) {
-            inference_worker<inference_engine::ptr> inferencer{cpu_ies[i], cpu_taskq};
+            inference_worker<inference_engine::ptr> inferencer{cpu_ies[i], cpu_taskq, resq};
             cpu_ie_workers[i] = std::thread{std::bind(inferencer)};
             cpu_ie_workers[i].detach();
         }
@@ -197,13 +212,13 @@ int main(int argc, char const *argv[])
         int gpu_num_workers = gpu_ies.size();
         std::vector<std::thread> gpu_ie_workers(num_workers);
         for (int i = 0; i < gpu_num_workers; ++i) {
-            inference_worker<inference_engine::ptr> inferencer{gpu_ies[i], gpu_taskq};
+            inference_worker<inference_engine::ptr> inferencer{gpu_ies[i], gpu_taskq,resq};
             gpu_ie_workers[i] = std::thread{std::bind(inferencer)};
             gpu_ie_workers[i].detach();
         }
         // fpga inference in the main threads
         if (fpga) {
-            inference_worker<inference_engine::ptr> inferencer{fpga_ies[0], fpga_taskq};
+            inference_worker<inference_engine::ptr> inferencer{fpga_ies[0], fpga_taskq,resq};
             inferencer();
         }
     }

@@ -62,6 +62,17 @@ struct send_lambda {
 };
 
 /**
+ * @brief 
+ * 
+ * @param ec 
+ * @param what 
+ * @return * Report 
+ */
+void fail(beast::error_code ec, char const* what) {
+    std::cerr << what << ": " << ec.message() << "\n";
+} //! fail
+
+/**
  * @brief Return mime_type base on the path of the string
 */
 beast::string_view
