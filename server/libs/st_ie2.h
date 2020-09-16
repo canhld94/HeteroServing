@@ -65,7 +65,7 @@ namespace ie {
         Blob::Ptr blob;
         int width;
         int height;
-    }
+    };
 
     // OpenVino Inference Engine
     using namespace InferenceEngine;
@@ -281,7 +281,6 @@ namespace ie {
             catch (const cv::Exception &e) {
                 // let not opencv silly exception terminate our program
                 std::cerr << "Error: " << e.what() << std::endl;
-                return nullptr;
             }
         }
     public:

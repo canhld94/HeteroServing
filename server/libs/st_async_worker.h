@@ -71,7 +71,6 @@ using http_mq = blocking_queue<http_conn>;
  * of the network as well as the parser to the post processing worker.
  * The socket must be passed as well, and the async_pp_worker need to parse
  * the blob, and write to the socket to response client
- * 
  */
 
 struct inference_output {
@@ -96,6 +95,7 @@ namespace worker {
     class listener : public std::enable_shared_from_this<listenr> {
     private:
         net::io_context &ioc;
+        tcp::endpoint endpoint;
         tcp::acceptor acceptor;
         connection_mq::ptr connq;
     public:
@@ -270,7 +270,6 @@ namespace worker {
                 req.method() != http::verb::post)
                 return sender(error_message(req,http::status::bad_request,"Unknown HTTP-method"));
             // Request path must be absolute and not contain "..".
-            beast::error_code ec;
             std::string target = request_resolve(req.target(),ec);
             if (target.size() == 0) {
                 return sender(error_message(req,http::status::bad_request,"Illegal request-target"));
