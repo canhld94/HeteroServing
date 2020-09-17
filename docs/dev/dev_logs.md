@@ -2,6 +2,20 @@
 
 What have been done and what to learn up to
 
+## ---- 2020 / 09 / 17 ----
+
+- __What've been done__
+  - Reactor server compiled and worked
+
+- _Problem_:
+  - Reactor server crashs after some request
+
+- __Backlog__:
+  - Implement reactor models that support running different models on different devices
+  - Add FCN16s to model server
+  - Add Faster RCNN DOTA to model server
+
+
 ## ---- 2020 / 09 / 11 ----
 
 - __What've been done__
