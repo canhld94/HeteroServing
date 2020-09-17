@@ -1,26 +1,14 @@
 {
     "ip": "0.0.0.0",
-    "port": "8080",
+    "port": "8081",
     "inference engines": [
       {
-        "device": "fpga",
-        "models": [
-            {
-                "name": "yolov3",
-                "graph": "/home/canhld/workplace/InferenceServer/openvino_models/dota/yolo_v3_dota_fp16.xml",
-                "label": "/home/canhld/workplace/InferenceServer/openvino_models/dota/dota.txt",
-                "replicas": "1",
-                "bitstream": "/opt/intel/openvino_2019.1.144/bitstreams/a10_devkit_bitstreams/2019R1_A10DK_FP16_TinyYolo.aocx"
-            }
-        ]
-      },
-      {
         "device": "cpu",
-        "name": "yolov3",
         "models": [
             {
-                "graph": "/home/canhld/workplace/InferenceServer/openvino_models/dota/yolo_v3_dota_fp32.xml",
-                "label": "/home/canhld/workplace/InferenceServer/openvino_models/dota/dota.txt",
+                "name": "ssd",
+                "graph": "/home/canhld/workplace/InferenceServer/openvino_models/dota/ssd608_mobilenet_v2_dota_fp32.xml",
+                "label": "/home/canhld/workplace/InferenceServer/openvino_models/dota/dota_ssd.txt",
                 "replicas": "4"
             }
         ]

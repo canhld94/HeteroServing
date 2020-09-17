@@ -60,13 +60,11 @@ namespace ie {
         float prop;         //!< confidence score
         int c[4];           //!< coordinates of bounding box
     };
-
-    struct inference_output {
-        Blob::Ptr blob;
+    struct network_output {
+        InferRequest::Ptr infer_request;
         int width;
         int height;
     };
-
     // OpenVino Inference Engine
     using namespace InferenceEngine;
 
@@ -246,51 +244,18 @@ namespace ie {
         CNNLayerPtr get_layer(const char* name) {
             return network.getLayerByName(name);
         }
-
-        inference_output run (const char* data, int size) {
-            try {
-                std::chrono::time_point<std::chrono::system_clock> start;
-                std::chrono::time_point<std::chrono::system_clock> end;
-                std::chrono::duration<double,std::milli> elapsed_mil;
-
-                // decode out image
-                start = std::chrono::system_clock::now();
-                cv::Mat frame = cv::imdecode(cv::Mat(1,size,CV_8UC3, (unsigned char*) data),cv::IMREAD_UNCHANGED);
-                const int width = frame.size().width;
-                const int height = frame.size().height;
-                end = std::chrono::system_clock::now();
-                elapsed_mil = end - start;
-                log->debug("Decode image in {} ms", elapsed_mil.count());
-
-                // create new request
-                start = std::chrono::system_clock::now();
-                InferRequest::Ptr infer_request = exe_network.CreateInferRequestPtr();
-                frameToBlob(frame, infer_request, inputInfor.begin()->first);
-                
-                // do inference
-                infer_request->Infer();
-                end = std::chrono::system_clock::now(); // sync mode only
-                elapsed_mil = end - start;
-                log->debug("Create and do inference request in {} ms", elapsed_mil.count());
-                
-                // process ssd output
-                start = std::chrono::system_clock::now();
-                auto blob = infer_request->GetBlob(outputName);
-                return {blob,width,height};
-            }
-            catch (const cv::Exception &e) {
-                // let not opencv silly exception terminate our program
-                std::cerr << "Error: " << e.what() << std::endl;
-            }
-        }
     public:
+    
+        virtual network_output run (const char* data, int size) {
+            return {nullptr,-1,-1};
+        }
         /**
          * @brief Parse detection output from output blob of the network
          * 
          * @param blob 
          * @return std::vector<bbox> 
          */
-        virtual std::vector<bbox> detection_parser (Blob::Ptr& blob) {
+        virtual std::vector<bbox> detection_parser (network_output& net_out) {
             return {};
         }
         /**
@@ -299,7 +264,7 @@ namespace ie {
          * @param blob 
          * @return std::vector<int> 
          */
-        virtual std::vector<int> classification_parser (Blob::Ptr& blob) {
+        virtual std::vector<int> classification_parser (network_output& net_out) {
             return {};
         }
         /**
@@ -313,17 +278,11 @@ namespace ie {
      * @brief SSD object detection network
      * 
      */
-    class async_inference_worker;
     class ssd : public inference_engine {
     private:
         // only inference worker can invoke inference engine
-        friend void async_inference_worker::operator();
+        // friend class st::worker::async_inference_worker;
     protected:
-        /**
-         * @brief Init the input of the model
-         * @details SSD only have 1 input
-         * @param precision 
-         */
         void init_IO(Precision p, InferenceEngine::Layout layout) override {
             // Input Blob
             auto inputInfo = InputsDataMap(network.getInputsInfo());
@@ -349,6 +308,40 @@ namespace ie {
                 throw std::logic_error("SSD should have 7 as a last dimension");
             }
         }
+        network_output run (const char* data, int size) override {
+            try {
+                std::chrono::time_point<std::chrono::system_clock> start;
+                std::chrono::time_point<std::chrono::system_clock> end;
+                std::chrono::duration<double,std::milli> elapsed_mil;
+
+                // decode out image
+                start = std::chrono::system_clock::now();
+                cv::Mat frame = cv::imdecode(cv::Mat(1,size,CV_8UC3, (unsigned char*) data),cv::IMREAD_UNCHANGED);
+                const int width = frame.size().width;
+                const int height = frame.size().height;
+                end = std::chrono::system_clock::now();
+                elapsed_mil = end - start;
+                log->debug("Decode image in {} ms", elapsed_mil.count());
+
+                // create new request
+                start = std::chrono::system_clock::now();
+                auto inputInfo = InputsDataMap(network.getInputsInfo());
+                InferRequest::Ptr infer_request = exe_network.CreateInferRequestPtr();
+                frameToBlob(frame, infer_request, inputInfo.begin()->first);
+                
+                // do inference
+                infer_request->Infer();
+                end = std::chrono::system_clock::now(); // sync mode only
+                elapsed_mil = end - start;
+                log->debug("Create and do inference request in {} ms", elapsed_mil.count());
+                return {infer_request,width,height};
+            }
+            catch (const cv::Exception &e) {
+                // let not opencv silly exception terminate our program
+                std::cerr << "Error: " << e.what() << std::endl;
+                return {nullptr,-1,-1};
+            }
+        }
     public:
         /**
          * @brief Construct a new inference engine object
@@ -371,19 +364,26 @@ namespace ie {
             load_plugin({});
             set_labels(label);         
         }
-        /**
-         * @brief parse output blob implementation for SSD
-         * 
-         * @param Blob::Ptr output blob of the network
-         * @return std::vector<bbox> 
-         */
-        std::vector<bbox> detection_parser (Blob::Ptr& blob) override {
+        std::vector<bbox> detection_parser (network_output &net_out ) override {
             std::vector<bbox> ret = {}; // return value
             try {
+                std::chrono::time_point<std::chrono::system_clock> start;
+                std::chrono::time_point<std::chrono::system_clock> end;
+                std::chrono::duration<double,std::milli> elapsed_mil;
+                start = std::chrono::system_clock::now();
+                auto infer_request = net_out.infer_request;
+                auto width = net_out.width;
+                auto height = net_out.height;
+                auto outputInfo = OutputsDataMap(network.getOutputsInfo());
+                auto output_name = outputInfo.begin()->first;
+                auto blob = infer_request->GetBlob(output_name);
                 const float *detections = blob->buffer().as<PrecisionTrait<Precision::FP32>::value_type*>();
                 auto dims = blob->dims();
-                const int maxProposalCount = dims[2];
-                const int objectSize = dims[3];
+                // for (auto &v : dims) {
+                //     std::cout << v << " " << std::endl;
+                // }
+                const int maxProposalCount = dims[1];
+                const int objectSize = dims[0];
                 // if (dims != )
                 for (int i = 0; i < maxProposalCount; i++) {
                     float image_id = detections[i * objectSize + 0];

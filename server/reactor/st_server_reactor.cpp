@@ -109,15 +109,13 @@ int main(int argc, char const *argv[])
         // server
         auto ip = config.get<std::string>("ip");
         auto port = config.get<std::string>("port");
-
+        std:: cout << ip << ":" << port << std::endl;
         // inference engine
-        bool fpga = false, gpu = false, cpu = false;
         std::vector<inference_engine::ptr> cpu_ies;
         std::vector<inference_engine::ptr> gpu_ies; // default: nvgpu
         std::vector<inference_engine::ptr> fpga_ies;
 
         const auto &ie_array = config.get_child("inference engines");
-        std::unordered_set<std::string> fpga_devs; 
         ie_factory factory;
         // iterate over all devices
         for (auto it = ie_array.begin(); it != ie_array.end(); ++it) {
@@ -128,13 +126,13 @@ int main(int argc, char const *argv[])
             auto &model_list = conf.get_child("models");
             if (model_list.size() == 0) continue;
             // currently, one device can run only one models, so only get the begin
-            auto model = conf.begin()->second;
+            auto model = model_list.begin()->second;
             std::vector<inference_engine::ptr> tmp;
-            const std::string name = conf.get<std::string>("name");
+            const std::string name = model.get<std::string>("name");
             // path to the model graph and weight
             const std::string &graph = model.get<std::string>("graph");
-            const std::string &labels = ie.get<std::string>("labels");
-            const int replicas = ie.get<std::string>("replicas");
+            const std::string &labels = model.get<std::string>("label");
+            const int replicas = model.get<int>("replicas");
             bool is_fpga = device.find("fpga") != std::string::npos;
             bool is_cpu = device.find("cpu") != std::string::npos;
             bool is_gpu = device.find("nvgpu") != std::string::npos; // default nv gpu
@@ -146,15 +144,15 @@ int main(int argc, char const *argv[])
                     throw fpga_overused();
                 }
                 // bitstream
-                const std::string &bitstream = fpga_conf.get<std::string>("bitstream");
-                // setenv("DLA_AOCX",bitstream.c_str(),0);
-                setenv("CL_CONTEXT_COMPILER_MODE_INTELFPGA","3",0);
+                const std::string &bitstream = conf.get<std::string>("bitstream");
+                setenv("DLA_AOCX",bitstream.c_str(),0);
+                // setenv("CL_CONTEXT_COMPILER_MODE_INTELFPGA","3",0);
             }
             // create inference engines
             auto mcode = factory.str2mcode(name);
-            auto dcode = factory.str2dcode(name);
+            auto dcode = factory.str2dcode(device);
             for (int i = 0; i < replicas; ++i) {
-                tmp.push_back(factory.create_inference_engin(type,dcode,model,labels));
+                tmp.push_back(factory.create_inference_engin(mcode,dcode,graph,labels));
             }
             if (is_fpga) {
                 fpga_ies = std::move(tmp);
@@ -173,19 +171,19 @@ int main(int argc, char const *argv[])
         bool cpu = cpu_ies.size() > 0;
         bool fpga = fpga_ies.size() > 0;
         bool gpu = gpu_ies.size() > 0;
-        http_mq::ptr cpu_taskq = cpu ? std::make_shared<http_mq::ptr>() : nullptr;
-        http_mq::ptr gpu_taskq = gpu ? std::make_shared<http_mq::ptr>() : nullptr;
-        http_mq::ptr fpga_taskq = fpga ? std::make_shared<http_mq::ptr>() : nullptr;
+        http_mq::ptr cpu_taskq = cpu ? std::make_shared<http_mq>() : nullptr;
+        http_mq::ptr gpu_taskq = gpu ? std::make_shared<http_mq>() : nullptr;
+        http_mq::ptr fpga_taskq = fpga ? std::make_shared<http_mq>() : nullptr;
         // response queue - 1
-        response_queue::ptr resq = std::make_shared<response_queue>();
+        response_mq::ptr resq = std::make_shared<response_mq>();
 
         // spawn the listening workers - 3
-        async_listening_worker listeners{conn,ip,port,3};
+        async_listening_worker listener{connq,ip,port,3};
         std::thread{std::bind(listener)}.detach();
 
         // spwan the http workers
         int num_http_workers = 3;
-        std::vector<async_http_worker> http_workers(num_http_workers);
+        std::vector<std::thread> http_workers(num_http_workers);
         for (int i = 0;  i < num_http_workers; ++i) {
             async_http_worker worker{connq,cpu_taskq,fpga_taskq,gpu_taskq};
             http_workers[i] = std::thread{std::bind(worker)};
@@ -197,28 +195,36 @@ int main(int argc, char const *argv[])
         for (int i = 0;  i < num_pp_workers; ++i) {
             async_pp_worker worker{resq};
             pp_workers[i] = std::thread{std::bind(worker)};
-            pp_worker[i].detach();
+            pp_workers[i].detach();
         }
         // spawn the infrence workers
         // cpu inference work group   
         int cpu_num_workers = cpu_ies.size();
-        std::vector<std::thread> cpu_ie_workers(num_workers);
-        for (int i = 0; i < cpu_num_workers; ++i) {
-            inference_worker<inference_engine::ptr> inferencer{cpu_ies[i], cpu_taskq, resq};
+        std::vector<std::thread> cpu_ie_workers(cpu_num_workers);
+        for (int i = 1; i < cpu_num_workers; ++i) {
+            async_inference_worker inferencer{cpu_ies[i], cpu_taskq, resq};
             cpu_ie_workers[i] = std::thread{std::bind(inferencer)};
             cpu_ie_workers[i].detach();
         }
         // gpu inference work group
         int gpu_num_workers = gpu_ies.size();
-        std::vector<std::thread> gpu_ie_workers(num_workers);
+        std::vector<std::thread> gpu_ie_workers(gpu_num_workers);
         for (int i = 0; i < gpu_num_workers; ++i) {
-            inference_worker<inference_engine::ptr> inferencer{gpu_ies[i], gpu_taskq,resq};
+            async_inference_worker inferencer{gpu_ies[i], gpu_taskq,resq};
             gpu_ie_workers[i] = std::thread{std::bind(inferencer)};
             gpu_ie_workers[i].detach();
         }
         // fpga inference in the main threads
         if (fpga) {
-            inference_worker<inference_engine::ptr> inferencer{fpga_ies[0], fpga_taskq,resq};
+            async_inference_worker inferencer_cpu{cpu_ies[0], cpu_taskq, resq};
+            cpu_ie_workers[0] = std::thread{std::bind(inferencer_cpu)};
+            cpu_ie_workers[0].detach();
+            async_inference_worker inferencer{fpga_ies[0], fpga_taskq,resq};
+            inferencer();
+        }
+        else {
+            // if no fpga, must run one inferencer threads on main
+            async_inference_worker inferencer{cpu_ies[0], cpu_taskq,resq};
             inferencer();
         }
     }

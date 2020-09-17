@@ -44,7 +44,7 @@ typedef bpt::ptree JSON;                // just hiding the ugly name
 #include "st_ie2.h"
 #include "st_sync.h"
 using namespace st::sync;
-using st::ie::bbox;
+using namespace st::ie;
 
 
 /**
@@ -62,8 +62,13 @@ using connection_mq = blocking_queue<tcp::socket>;
 struct http_conn {
     tcp::socket sock;
     beast_basic_request req;
+    http_conn() = delete;
+    http_conn(http_conn &other) = delete;
+    http_conn(tcp::socket &&_sock, beast_basic_request &&_req): 
+        sock(std::move(_sock)), req(_req) {};
+    using ptr = std::shared_ptr<http_conn>;
 };
-using http_mq = blocking_queue<http_conn>;
+using http_mq = blocking_queue<http_conn::ptr>;
 
 /**
  * @brief Queue between inference workes and post processing workers
@@ -75,62 +80,67 @@ using http_mq = blocking_queue<http_conn>;
 
 struct inference_output {
     tcp::socket sock;
-    Blob::Ptr blob;
+    network_output net_out;
     inference_engine::ptr ie;
+    inference_output() = delete;
+    inference_output(inference_output& other) = delete;
+    inference_output(tcp::socket &&_sock,network_output &&_net_out, inference_engine::ptr _ie) :
+        sock(std::move(_sock)), net_out(std::move(_net_out)), ie(std::move(_ie)) {};
+    using ptr = std::shared_ptr<inference_output>;
 };
-using response_queue = blocking_queue<inference_output>;
+using response_mq = blocking_queue<inference_output::ptr>;
 
 namespace st {
 namespace worker {
 
-    class session : public std::enable_shared_from_this<session> {
-    private:
-        beast::tcp_stream stream;
-        beast::flat_buffer buffer;
-        beast_basic_request req;
-    public:
+    // class session : public std::enable_shared_from_this<session> {
+    // private:
+    //     beast::tcp_stream stream;
+    //     beast::flat_buffer buffer;
+    //     beast_basic_request req;
+    // public:
 
-    }
+    // };
 
-    class listener : public std::enable_shared_from_this<listenr> {
+    class listener : public std::enable_shared_from_this<listener> {
     private:
         net::io_context &ioc;
-        tcp::endpoint endpoint;
         tcp::acceptor acceptor;
         connection_mq::ptr connq;
     public:
-        listener() = delete;
-        listener(net::io_context& _ioc, tcp::endpoint _endpoint, 
-        connection_mq::ptr &_connq) : ioc(_ioc), endpoint(_endpoint), connq(_connq) {
-                    beast::error_code ec;
-                    // open the acceptor
-                    acceptor.open(endpoint.protocol(),ec);
-                    if (ec) {
-                        fail(ec,"open");
-                        return;
-                    }
+        // listener() = delete;
+        listener(net::io_context& _ioc, tcp::endpoint endpoint,
+                connection_mq::ptr &_connq) : ioc(_ioc), 
+                acceptor(net::make_strand(_ioc)), connq(_connq) {
+            beast::error_code ec;
+            // open the acceptor
+            acceptor.open(endpoint.protocol(),ec);
+            if (ec) {
+                fail(ec,"open");
+                return;
+            }
 
-                    // allow address reuse
-                    acceptor.set_option(net::socket_base::reuse_address(true),ec);
-                    if (ec) {
-                        fail(ec,"set option");
-                        return;
-                    }
+            // allow address reuse
+            acceptor.set_option(net::socket_base::reuse_address(true),ec);
+            if (ec) {
+                fail(ec,"set option");
+                return;
+            }
 
-                    // bind to the server address
-                    acceptor.bind(endpoint,ec);
-                    if (ec) {
-                        fail(ec,"bind");
-                        return;
-                    }
+            // bind to the server address
+            acceptor.bind(endpoint,ec);
+            if (ec) {
+                fail(ec,"bind");
+                return;
+            }
 
-                    // start listening for connection
-                    acceptor.listen(net::socket_base::max_listen_connections,ec);
-                    if (ec) {
-                        fail(ec,"listen");
-                        return;
-                    }
-                }
+            // start listening for connection
+            acceptor.listen(net::socket_base::max_listen_connections,ec);
+            if (ec) {
+                fail(ec,"listen");
+                return;
+            }
+        }
 
         // Start accepting incomming connection
         void run() {
@@ -142,7 +152,7 @@ namespace worker {
             acceptor.async_accept(
                 net::make_strand(ioc),
                 beast::bind_front_handler(
-                    listener::on_accept,
+                    &listener::on_accept,
                     shared_from_this()
                 )
             );
@@ -153,12 +163,12 @@ namespace worker {
             }
             else {
                 // just push it to queue
-                connq.push(std::move(socket));
+                connq->push(std::move(socket));
                 // keep acceptong
                 do_accept();
             }
         }
-    }
+    };
     /**
      * @brief listening worker in async mode
      * @details in async mode, there is a group of listening worker. When there
@@ -179,16 +189,13 @@ namespace worker {
             net::io_context ioc{num_threads};
 
             // create and launch a listening port
-            std::make_shared<listener>(
-                ioc,
-                tcp::endpoint{ip,p}
-            )->run();
+            std::make_shared<listener>(ioc,tcp::endpoint{ip,p},connq)->run();
 
             // run the io service on the requested threads
             std::vector<std::thread> threads;
-            v.reserve(num_threads - 1);
+            threads.reserve(num_threads - 1);
             for (int i = num_threads-1; i >= 0; --i) {
-                v.emplace_back([&ioc]{
+                threads.emplace_back([&ioc]{
                     ioc.run();
                 });
             }
@@ -206,10 +213,10 @@ namespace worker {
                 listen(address, port, num_threads);
             }
             catch (const std::exception& e) {
-                std::cerr << e.what() << endl;
+                std::cerr << e.what() << std::endl;
             }
         }
-    }
+    };
 
     class async_http_worker : public std::enable_shared_from_this<async_http_worker> {
     private:
@@ -220,7 +227,7 @@ namespace worker {
     public:
         async_http_worker() {};
         async_http_worker(connection_mq::ptr &_connq, http_mq::ptr &_cpu_taskq,
-                          http_mq::ptr &_fpga_taskq, http_mq::ptr &gpu_taskq) :
+                          http_mq::ptr &_fpga_taskq, http_mq::ptr &_gpu_taskq) :
                           connq(_connq), cpu_taskq(_cpu_taskq), fpga_taskq(_fpga_taskq),
                           gpu_taskq(_gpu_taskq) {};
 
@@ -232,6 +239,9 @@ namespace worker {
                     // read from sock
                     PROFILE_DEBUG("Read From Socket",
                     beast_basic_request req;
+                    beast::error_code ec;
+                    bool close = false;
+                    send_lambda<tcp::socket> sender{sock,close,ec};
                     http::read(sock, buffer, req, ec);
                     );
                     // if ec, just report server error
@@ -244,7 +254,7 @@ namespace worker {
                 }
             }
             catch (const std::exception& e) {
-                std::cerr << e.what() << endl;
+                std::cerr << e.what() << std::endl;
             }
         }
 
@@ -323,29 +333,26 @@ namespace worker {
                 // handle post request
                 if (target == "inference/cpu") {
                     if (cpu_taskq) {
-                        http_conn message{std::move(sock),std::move(req)};
-                        cpu_taskq->push(move(message))
+                        cpu_taskq->push(std::make_shared<http_conn>(std::move(sock),std::move(req)));
                     }
                     else {
-                        sender(error_message(req,http::status::not_implemented,"Service not yet implemented"))
+                        sender(error_message(req,http::status::not_implemented,"Service not yet implemented"));
                     }
                 }
                 else if (target == "inference/fpga") {
                     if (fpga_taskq) {
-                        http_conn message(std::move(req),std::move(sock));
-                        fpga_taskq->push(move(message))
+                        fpga_taskq->push(std::make_shared<http_conn>(std::move(sock),std::move(req)));
                     }
                     else {
-                        sender(error_message(req,http::status::not_implemented,"Service not yet implemented"))
+                        sender(error_message(req,http::status::not_implemented,"Service not yet implemented"));
                     }
                 }
                 else if (target == "inference/gpu") {
                     if (gpu_taskq) {
-                        http_conn message{std::move(sock),std::move(req)};
-                        gpu_taskq->push(move(message))
+                        gpu_taskq->push(std::make_shared<http_conn>(std::move(sock),std::move(req)));
                     }
                     else {
-                        sender(error_message(req,http::status::not_implemented,"Service not yet implemented"))
+                        sender(error_message(req,http::status::not_implemented,"Service not yet implemented"));
                     }
                 }
                 else {
@@ -412,42 +419,42 @@ namespace worker {
         } //! metadata_request_handler
     };
 
-    template <class IEPtr>
     class async_inference_worker {
     private:
-        IEPtr Ie;                                       //!< pointer to inference engine
+        inference_engine::ptr Ie;                                       //!< pointer to inference engine
         http_mq::ptr taskq;                             //!< task queue, will get job in this queue
-        response_queue::ptr resq;
+        response_mq::ptr resq;
     public:
         async_inference_worker() {};
-        async_inference_worker(IEptr &&_Ie, http_mq::ptr &_taskq, response_mq::ptr &_resq) :
+        async_inference_worker(inference_engine::ptr &_Ie, http_mq::ptr &_taskq, response_mq::ptr &_resq) :
                                 Ie(_Ie), taskq(_taskq), resq(_resq) {}; 
         void operator () () {
             try {
                 // get the request and the socket from taskq
-                auto [sock,req] = taskq->pop();
+                auto conn = taskq->pop();
+                auto &sock = conn->sock;
+                auto &req = conn->req;
                 auto &body = req.body();
                 auto data = body.data();
                 int size = body.size();
                 // run the blob
-                auto blob = IEptr->run_detection(data,size);
+                auto net_out = Ie->run(data,size);
                 // push to resq
-                IEPtr ie = Ie;
-                inference_output message{std::move(sock),std::move(blob),std::move(Ie)};
-                resq.push(std::move(message));
+                inference_engine::ptr ie = Ie;
+                resq->push(std::make_shared<inference_output>(std::move(sock),std::move(net_out),std::move(ie)));
             }
             catch (const std::exception& e) {
-                std::cerr << e.what() << endl;
+                std::cerr << e.what() << std::endl;
             }
         }
-    }
+    };
 
     class async_pp_worker {
     private: 
-        response_queue::ptr resq;
+        response_mq::ptr resq;
     public:
         async_pp_worker() {};
-        async_pp_worker(response_queue::ptr &_resq) : resq(_resq) {};
+        async_pp_worker(response_mq::ptr &_resq) : resq(_resq) {};
         void operator () () {
             try {
                 for (;;) {
@@ -455,18 +462,21 @@ namespace worker {
                     bool close;
                     // it's ok because async_pp_worker can only access public member 
                     // of inference engine
-                    auto [sock,blob,ie] = resq->pop();
+                    auto infer_out = resq->pop();
+                    auto &ie = infer_out->ie;
+                    auto &net_out = infer_out->net_out;
+                    auto &sock = infer_out->sock; 
                     send_lambda<tcp::socket> sender{sock,close,ec};
                     // we should parse infer_req, and move to sock
-                    auto bboxes = ie->parse_detection(blob);
+                    auto detection_out = ie->detection_parser(net_out);
                     // create response and send throught the socket
-                    int n = bboxes.size();
+                    int n = detection_out.size();
                     // create property tree and write to json
-                    JSON res;                   // our response
+                    JSON detections;                   // our response
                     JSON bboxes;                // predicion
                     for (int i = 0; i < n; ++i) {
                         // parse prediction[i] to p[i]
-                        bbox &pred = prediction[i];
+                        bbox &pred = detection_out[i];
                         JSON p;
                         p.put<int>("label_id",pred.label_id);
                         p.put<std::string>("label",pred.label);
@@ -480,19 +490,19 @@ namespace worker {
                             p.put_child("detection_box",tmp);
                             bboxes.push_back({"",p});
                     }
-                    res.put_child("predictions",bboxes);
+                    detections.put_child("predictions",bboxes);
                     std::ostringstream ss;
-                    bpt::write_json(ss,res);
+                    bpt::write_json(ss,detections);
                     auto body = ss.str();
                     auto const size = body.size();
                     beast_basic_response res{
                         std::piecewise_construct,
                         std::make_tuple(std::move(body)),
-                        std::make_tuple(http::status::ok, req.version())};
+                        std::make_tuple(http::status::ok, 11)};
                     res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
                     res.set(http::field::content_type, "application/json");
                     res.content_length(size);
-                    res.keep_alive(req.keep_alive());
+                    // res.keep_alive(req.keep_alive());
                     sender(std::move(res));
                 } 
             }
@@ -500,7 +510,7 @@ namespace worker {
                 std::cerr << e.what() << '\n';
             }
         }
-    }
+    };
 
 } // namespace ie
 } // namespace worker

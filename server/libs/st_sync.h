@@ -270,10 +270,10 @@ namespace sync {
          * 
          * @param item 
          */
-        void push(const Message&& item) {
+        void push(Message&& item) {
             {
                 Lock lk{mtx};
-                queue.push_back(item);
+                queue.push_back(std::move(item));
             }
             cv.notify_one();
         }
