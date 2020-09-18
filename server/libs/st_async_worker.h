@@ -204,12 +204,13 @@ namespace worker {
         } 
     public:
         async_listening_worker() {};
-        async_listening_worker(connection_mq::ptr &_connq, std::string _address, 
+        async_listening_worker(connection_mq::ptr &_connq, std::string &_address, 
                                 std::string &_port, int _num_threads) : 
                                 connq(_connq), address(_address), port(_port),
                                 num_threads(_num_threads) {};
         void operator () () {
             try {
+                pthread_setname_np(pthread_self(),"async lst"); // just for debugging
                 listen(address, port, num_threads);
             }
             catch (const std::exception& e) {
@@ -233,11 +234,11 @@ namespace worker {
 
         void operator () () {
             try {
-                beast::flat_buffer buffer;
                 for (;;) {
                     auto sock = connq->pop();
                     // read from sock
                     PROFILE_DEBUG("Read From Socket",
+                    beast::flat_buffer buffer;
                     beast_basic_request req;
                     beast::error_code ec;
                     bool close = false;
@@ -249,7 +250,6 @@ namespace worker {
                         sender(error_message(req,http::status::unknown,ec.message()));
                         continue;
                     }
-                    // handle request
                     request_handler(std::move(req),std::move(sock));
                 }
             }
@@ -257,7 +257,6 @@ namespace worker {
                 std::cerr << e.what() << std::endl;
             }
         }
-
     private:
         http::response<http::string_body> 
         error_message(beast_basic_request &req, http::status status, beast::string_view why) {
@@ -431,17 +430,20 @@ namespace worker {
         void operator () () {
             try {
                 // get the request and the socket from taskq
-                auto conn = taskq->pop();
-                auto &sock = conn->sock;
-                auto &req = conn->req;
-                auto &body = req.body();
-                auto data = body.data();
-                int size = body.size();
-                // run the blob
-                auto net_out = Ie->run(data,size);
-                // push to resq
-                inference_engine::ptr ie = Ie;
-                resq->push(std::make_shared<inference_output>(std::move(sock),std::move(net_out),std::move(ie)));
+                pthread_setname_np(pthread_self(),"async DL"); // just for debugging
+                for (;;) {
+                    auto conn = taskq->pop();
+                    auto &sock = conn->sock;
+                    auto &req = conn->req;
+                    auto &body = req.body();
+                    auto data = body.data();
+                    int size = body.size();
+                    // run the blob
+                    auto net_out = Ie->run(data,size);
+                    // push to resq
+                    inference_engine::ptr ie = Ie;
+                    resq->push(std::make_shared<inference_output>(std::move(sock),std::move(net_out),std::move(ie)));
+                }
             }
             catch (const std::exception& e) {
                 std::cerr << e.what() << std::endl;
@@ -457,6 +459,7 @@ namespace worker {
         async_pp_worker(response_mq::ptr &_resq) : resq(_resq) {};
         void operator () () {
             try {
+                pthread_setname_np(pthread_self(),"async pp"); // just for debugging
                 for (;;) {
                     beast::error_code ec;
                     bool close;

@@ -6,6 +6,18 @@ What have been done and what to learn up to
 
 - __What've been done__
   - Reactor server compiled and worked
+  - Server stop after one request because I forget to put inference into a loop, unbelievable
+
+- __Backlog__:
+  - Implement reactor models that support running different models on different devices
+  - Add FCN16s to model server
+  - Add Faster RCNN DOTA to model server
+
+
+## ---- 2020 / 09 / 17 ----
+
+- __What've been done__
+  - Reactor server compiled and worked
 
 - _Problem_:
   - Reactor server crashs after some request
