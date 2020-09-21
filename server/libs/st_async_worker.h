@@ -507,6 +507,8 @@ namespace worker {
                     res.content_length(size);
                     // res.keep_alive(req.keep_alive());
                     sender(std::move(res));
+                    // if we can reach here, close socket no matter what
+                    sock.shutdown(tcp::socket::shutdown_send,ec);
                 } 
             }
             catch(const std::exception& e) {
