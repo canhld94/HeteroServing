@@ -17,7 +17,7 @@ port = sys.argv[3]
 conn = http.client.HTTPConnection(ip+":"+port)
 
 # POST to /inference with body is the image
-conn.request('POST','/inference', body, headers)
+conn.request('POST','/inference/cpu', body, headers)
 res = conn.getresponse()
 jsondata = res.read()
 

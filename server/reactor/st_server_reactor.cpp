@@ -18,7 +18,8 @@
 #include <stdlib.h> 
 #include "st_ultis.h"
 #include "st_async_worker.h"
-#include "st_ie2.h"
+#include "st_ie_base.h"
+#include "st_ie_factory.h"
 #include "st_exception.h"
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
@@ -121,14 +122,14 @@ int main(int argc, char const *argv[])
         for (auto it = ie_array.begin(); it != ie_array.end(); ++it) {
             // get the configuration of each device
             auto conf = it->second;
-            const std::string device = conf.get<std::string>("device");
+            const std::string &device = conf.get<std::string>("device");
             // get the models list, pass if there is no models
             auto &model_list = conf.get_child("models");
             if (model_list.size() == 0) continue;
             // currently, one device can run only one models, so only get the begin
             auto model = model_list.begin()->second;
             std::vector<inference_engine::ptr> tmp;
-            const std::string name = model.get<std::string>("name");
+            const std::string &name = model.get<std::string>("name");
             // path to the model graph and weight
             const std::string &graph = model.get<std::string>("graph");
             const std::string &labels = model.get<std::string>("label");
@@ -149,10 +150,8 @@ int main(int argc, char const *argv[])
                 // setenv("CL_CONTEXT_COMPILER_MODE_INTELFPGA","3",0);
             }
             // create inference engines
-            auto mcode = factory.str2mcode(name);
-            auto dcode = factory.str2dcode(device);
             for (int i = 0; i < replicas; ++i) {
-                tmp.push_back(factory.create_inference_engin(mcode,dcode,graph,labels));
+                tmp.push_back(factory.create_inference_engine(name,device,graph,labels));
             }
             if (is_fpga) {
                 fpga_ies = std::move(tmp);

@@ -4,7 +4,7 @@
 cmake_minimum_required (VERSION 3.13)
 
 project(something)
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake-modules)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 if (CMAKE_BUILD_TYPE STREQUAL "")
     message(STATUS "CMAKE_BUILD_TYPE not defined, 'Release' will be used")
@@ -64,6 +64,11 @@ include_directories (
 # OpenCV and Inference Engine and TBB come with openvino
 find_package(OpenCV REQUIRED)
 find_package(InferenceEngine 1.6 REQUIRED)
+
+# CUDA, CUDNN, TensorRT
+find_package(CUDA REQUIRED)
+set(TensorRT_ROOT "/home/canhld/softwares/TensorRT-7.1.3.4/")
+find_package(TensorRT REQUIRED)
 
 # Other libraries: boost, gflags, gtest, spdlog is managed by conan
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)

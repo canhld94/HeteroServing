@@ -5,8 +5,8 @@
       {
         "name": "rcnn",
         "device": "cpu",
-        "model": "/home/canhld/workplace/InferenceServer/openvino_models/faster_rcnn_fp32.xml",
-        "labels": "/home/canhld/workplace/InferenceServer/openvino_models/ms_coco_91.txt"
+        "model": "/home/canhld/workplace/InferenceServer/openvino_models/coco/faster_rcnn_resnet50_fp32.xml",
+        "labels": "/home/canhld/workplace/InferenceServer/openvino_models/coco/ms_coco_91.txt"
       }
     ]
   }

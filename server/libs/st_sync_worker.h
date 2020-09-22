@@ -34,7 +34,7 @@ using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 typedef bpt::ptree JSON;                // just hiding the ugly name
 
 #include "st_ultis.h"
-#include "st_ie.h"
+#include "st_ie_base.h"
 #include "st_sync.h"
 
 namespace st {

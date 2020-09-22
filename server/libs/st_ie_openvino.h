@@ -1,43 +1,13 @@
-/***************************************************************************************
- * Copyright (C) 2020 canhld@.kaist.ac.kr
- * SPDX-License-Identifier: Apache-2.0
- * @b About: This file is a wrap-over of Intel OpenVino Inference Engine (and
- * others). It provide an uniform interface of inference engine, so the worker
- * don't need to worry about the underlying implementation of deep learning
- * algorithm in OpenVino or any DL framework. The only thing that workers care 
- * is a class with constructor and an invoking method.
- ***************************************************************************************/
 
-#pragma once 
-#include <stdio.h>
-#include <signal.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <errno.h>
-// C++
-#include <gflags/gflags.h>
-#include <functional>
-#include <iostream>
-#include <fstream>
-#include <random>
-#include <memory>
-#include <chrono>
+
+
+#pragma once
+
 #include <vector>
 #include <string>
-#include <algorithm>
-#include <iterator>
-#include <mutex>
-#include <utility>
-#include <memory>
-#include <thread>
-#include <csignal>
-#include <algorithm>
+#include <iostream>
+#include <chrono>
+
 
 #include <inference_engine.hpp>
 #include <opencv2/opencv.hpp>
@@ -45,25 +15,14 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include "st_exception.h"
+#include "st_ie_base.h"
+
+// OpenVino Inference Engine
+using namespace InferenceEngine;
+
 
 namespace st {
 namespace ie {
-
-    /**
-     * @brief Bouding box object
-     * @details Basic bouding box object that can use in any recognition task
-     */
-    struct bbox {
-        int label_id;       //!< label id
-        std::string label;  //!< class name
-        float prop;         //!< confidence score
-        int c[4];           //!< coordinates of bounding box
-    };
-
-    // OpenVino Inference Engine
-    using namespace InferenceEngine;
-
-
     /**
     * @brief Sets image data stored in cv::Mat object to a given Blob object.
     * @param orig_image - given cv::Mat object with an image data.
@@ -95,7 +54,13 @@ namespace ie {
             }
         }
     }
-
+    /**
+     * @brief Map opencv map to blob
+     * 
+     * @param frame 
+     * @param inferRequest 
+     * @param inputName 
+     */
     void frameToBlob(const cv::Mat& frame,
             InferRequest::Ptr& inferRequest,
             const std::string& inputName) {   
@@ -103,54 +68,56 @@ namespace ie {
         matU8ToBlob<uint8_t>(frame, frameBlob);
     }
 
+    /**
+     * @brief Output of an inference request
+     * 
+     */
+    struct network_output {
+        InferRequest::Ptr infer_request;
+        int width;
+        int height;
+    };
 
-    class inference_engine {
+    /**
+     * @brief OpenVino inference engine
+     * 
+     */
+    class openvino_inference_engine : public inference_engine {
     private:
         /**
          * @brief OpenVino Inference Plugin
          * 
          */
-        InferenceEngine::InferencePlugin plugin;               
+        InferenceEngine::InferencePlugin plugin;
     protected:
-      /**
-       * @brief The logical CNN network
-       * @details The object doesn't actually do the inferece request but hold
-       * the information of the network object such as architecture, weight, and
-       * device plugin. Excutable networks can be created from this network.
-       * Note that the executable networks are independent, e.g. they don't
-       * share any resouce. So we can create an executable network from a
-       * network, then reload the network with different architect or weights,
-       * then create another executable network.
-       */
-      InferenceEngine::CNNNetwork network;
-      /**
-       * @brief The excutable CNN network
-       * @details The actual CNN network that will excute the inference request.
-       * With CPU, as much as excutable CNN network can be created from a
-       * logical network. With FPGAs, number of excutable networks is number of
-       * availble FPGAs on the system. Several inference requests can be created
-       * within one executable network, but the ordered of execution is not
-       * guarantee FCFS
-       */
-      InferenceEngine::ExecutableNetwork exe_network;
-      /**
-       * @brief Vector of labels
-       *
-       */
-      std::vector<std::string> labels;
-      /**
-       * @brief Inference engine is the most important components in the system,
-       * so it will have
-       * a dedicated log
-       *
-       */
-      std::shared_ptr<spdlog::logger> log;
-    public:
         /**
-         * @brief Construct a new inference engine object
-         * 
+         * @brief The logical CNN network
+         * @details The object doesn't actually do the inferece request but hold
+         * the information of the network object such as architecture, weight, and
+         * device plugin. Excutable networks can be created from this network.
+         * Note that the executable networks are independent, e.g. they don't
+         * share any resouce. So we can create an executable network from a
+         * network, then reload the network with different architect or weights,
+         * then create another executable network.
          */
-        inference_engine() {}
+        InferenceEngine::CNNNetwork network;
+        /**
+         * @brief The excutable CNN network
+         * @details The actual CNN network that will excute the inference request.
+         * With CPU, as much as excutable CNN network can be created from a
+         * logical network. With FPGAs, number of excutable networks is number of
+         * availble FPGAs on the system. Several inference requests can be created
+         * within one executable network, but the ordered of execution is not
+         * guarantee FCFS
+         */
+        InferenceEngine::ExecutableNetwork exe_network;
+        /**
+         * @brief Inference engine is the most important components in the system,
+         * so it will have
+         * a dedicated log
+         *
+         */
+        std::shared_ptr<spdlog::logger> log;
         /**
          * @brief Initilize the device plugin
          * 
@@ -188,12 +155,6 @@ namespace ie {
             log->info("Model loaded");
         }
         /**
-         * @brief Init the input of the model
-         * @details This function is virtual and should be overrided for each network
-         * @param precision 
-         */
-        virtual void init_IO(Precision p, InferenceEngine::Layout layout) {}
-        /**
          * @brief Create an executable network from the logical netowrk
          * 
          * @param extension 
@@ -215,116 +176,43 @@ namespace ie {
             elapsed_mil = end - start;
             log->info("Creating new executable network in {} ms",elapsed_mil.count());
         }
+
         /**
          * @brief Perform sanity check for a network
          * @details This function is virutal and should be overrided for each network
          */
         virtual void IO_sanity_check () {}
-        /**
-         * @brief set the labels object
-         * 
-         * @param label 
-         */
-        void set_labels(const std::string& label) {
-            std::ifstream inputFile(label);
-            std::copy(std::istream_iterator<std::string>(inputFile),
-                std::istream_iterator<std::string>(),
-                std::back_inserter(labels));
-        }
-        /**
-         * @brief Get the layer object
-         * 
-         * @param name 
-         * @return CNNLayerPtr 
-         */
-        CNNLayerPtr get_layer(const char* name) {
-            return network.getLayerByName(name);
-        }
 
-        virtual std::vector<bbox> run_detection(const char* data, int size) {
-            return {};
-        }
-
-        virtual std::vector<int> run_classification(const char* data, int size) {
-            return {};
-        }
-        using ptr = std::shared_ptr<inference_engine>;
-    };
-
-    /**
-     * @brief SSD object detection network
-     * 
-     */
-    class ssd : public inference_engine {
-    public:
         /**
          * @brief Init the input of the model
-         * @details SSD only have 1 input
+         * @details Most of network only have one single image tensor input, some like
+         * faster r-cnn may have two (im_info), but it doesn't important here
          * @param precision 
          */
-        void init_IO(Precision p, InferenceEngine::Layout layout) override {
-            auto inputInfo = InputsDataMap(network.getInputsInfo());
-            InputInfo::Ptr& input = inputInfo.begin()->second;
-            std::cout << inputInfo.begin()->first << std::endl;
-            input->setPrecision(p);
-            input->getInputData()->setLayout(layout);
-        }
-        /**
-         * @brief Construct a new inference engine object
-         * @details This is a convinient constructor that ensembles constructing methods.
-         * @param model 
-         * @param device 
-         * @param label 
-         */
-        ssd(const std::string& device, const std::string& model, const std::string& label) {
-            std::ostringstream ss;
-            ss << "IELog" << rand();
-            std::string log_name = ss.str();
-            std::cout << log_name << std::endl;
-            log = spdlog::basic_logger_mt(log_name.c_str(),"logs/IE.txt");
-            log->set_pattern("[%H:%M:%S %z] [%n] [%^---%L---%$] [thread %t] %v");
-            log->info("Log started!");
-            init_plugin(device);
-            load_network(model);
-            init_IO(Precision::U8, Layout::NCHW);
-            load_plugin({});
-            set_labels(label);         
-        }
-        /**
-         * @brief Perform sanity check for SSD
-         * 
-         */
-        void IO_sanity_check() override {
-            // Input Blob
-            auto inputInfo = exe_network.GetInputsInfo();
-            if (inputInfo.size() != 1) {
-                throw std::logic_error("SSD has only one input");
-            }
-            // Output Blob
-            auto outputInfo = exe_network.GetOutputsInfo();
-            if (outputInfo.size() != 1) {
-                throw std::logic_error("SSD has only one output");
-            }
-            CDataPtr& output = outputInfo.begin()->second;
-            const SizeVector outputDims = output->getTensorDesc().getDims();
-            const int objectSize = outputDims[3];
-            if (outputDims.size() != 4) {
-                throw std::logic_error("Incorrect output dimensions for SSD");
-            }
-            if (objectSize != 7) {
-                throw std::logic_error("SSD should have 7 as a last dimension");
+        void init_IO(Precision p, InferenceEngine::Layout layout) {
+            IO_sanity_check(); // if wrong network, it will fail at this stage
+            auto input_info = InputsDataMap(network.getInputsInfo());
+            for (auto &item : input_info) {
+                if (item.second->getInputData()->getTensorDesc().getDims().size() == 4) {
+                    // this is image tensor
+                    item.second->setPrecision(p);
+                    item.second->setLayout(layout);
+                }
+                else if (item.second->getInputData()->getTensorDesc().getDims().size() == 2) {
+                    // this is image info 
+                    item.second->setPrecision(Precision::FP32);
+                }
             }
         }
+
         /**
-         * @brief run detection implementation for SSD
-         * 
-         * @param data pointer to the data
-         * @param size size of the (compressed) image
-         * @return std::vector<bbox> 
+         * @brief Do inference and return the infered request
+         * @details 
+         * @param data 
+         * @param size 
+         * @return InferRequest::Ptr 
          */
-        std::vector<bbox> run_detection(const char* data, int size) override {
-            IO_sanity_check();
-            std::vector<bbox> ret; // return value
+        network_output do_infer(const char* data, int size) {
             try {
                 std::chrono::time_point<std::chrono::system_clock> start;
                 std::chrono::time_point<std::chrono::system_clock> end;
@@ -341,25 +229,161 @@ namespace ie {
 
                 // create new request
                 start = std::chrono::system_clock::now();
+                auto input_info = exe_network.GetInputsInfo();
                 InferRequest::Ptr infer_request = exe_network.CreateInferRequestPtr();
-                auto inputInfor = exe_network.GetInputsInfo();
-                auto outputInfor = exe_network.GetOutputsInfo();
-                frameToBlob(frame, infer_request, inputInfor.begin()->first);
+                int input_width = -1, input_height = -1;
+                for (auto it = input_info.begin(); it != input_info.end(); it++) {
+                        auto name = it->first;
+                        auto input = it->second;
+                        if (input->getTensorDesc().getDims().size() == 4) {
+                                input_width = input->getTensorDesc().getDims()[2];
+                                input_height = input->getTensorDesc().getDims()[3];
+                        }
+                }
+                for (auto it = input_info.begin(); it != input_info.end(); it++) {
+                    auto name = it->first;
+                    auto input = it->second;
+                    if (input->getTensorDesc().getDims().size() == 4) {
+                            frameToBlob(frame, infer_request, name);
+                    }
+                    else if (input->getTensorDesc().getDims().size() == 2) {
+                        Blob::Ptr input2 = infer_request->GetBlob(name);
+                        float *p = input2->buffer().as<PrecisionTrait<Precision::FP32>::value_type*>();
+                        p[0] = static_cast<float>(input_width);
+                        p[1] = static_cast<float>(input_height);
+                    }
+                }
                 
                 // do inference
                 infer_request->Infer();
                 end = std::chrono::system_clock::now(); // sync mode only
                 elapsed_mil = end - start;
                 log->debug("Create and do inference request in {} ms", elapsed_mil.count());
-                
-                // process ssd output
+                return {infer_request,width,height};
+            }
+            catch (const cv::Exception &e) {
+                // let not opencv silly exception terminate our program
+                std::cerr << "Error: " << e.what() << std::endl;
+                return {nullptr,-1,-1};
+            }
+        }
+        /**
+         * @brief Get the layer object, only for YOLO
+         * 
+         * @param name 
+         * @return CNNLayerPtr 
+         */
+        CNNLayerPtr get_layer(const char* name) {
+            return network.getLayerByName(name);
+        }
+
+    public:
+        /**
+         * @brief Parse detection output of a inference request, network specific
+         * 
+         * @param net_out 
+         * @return std::vector<bbox> 
+         */
+        virtual std::vector<bbox> detection_parser (network_output& net_out) {
+            return {};
+        }
+
+        /**
+         * @brief Parse classification output of a inference request, network specific
+         * 
+         * @param net_out 
+         * @return std::vector<int> 
+         */
+        virtual std::vector<int> classification_parser (network_output& net_out) {
+            return {};
+        }
+
+        /****************************************************************/
+        /*  Inference engine public interface implementation            */
+        /****************************************************************/
+
+        std::vector<bbox> run_detection(const char* data, int size) final {
+            auto net_out = do_infer(data,size);
+            return detection_parser(net_out);
+        }
+        std::vector<int> run_classification(const char* data, int size) final {
+            auto net_out = do_infer(data,size);
+            return classification_parser(net_out);
+        }
+        using ptr = std::shared_ptr<openvino_inference_engine>;
+    };
+
+    /**
+     * @brief SSD object detection network
+     */
+    class openvino_ssd : public openvino_inference_engine {
+    protected:
+        // override IO_snaity_check for SSD
+        void IO_sanity_check() final {
+            // Input Blob
+            auto input_info = InputsDataMap(network.getInputsInfo());
+            if (input_info.size() != 1) {
+                throw std::logic_error("SSD has only one input");
+            }
+            // Output Blob
+            auto output_info = OutputsDataMap(network.getOutputsInfo());
+            if (output_info.size() != 1) {
+                throw std::logic_error("SSD has only one output");
+            }
+            auto output = output_info.begin()->second;
+            const SizeVector outputDims = output->getTensorDesc().getDims();
+            const int objectSize = outputDims[3];
+            if (outputDims.size() != 4) {
+                throw std::logic_error("Incorrect output dimensions for SSD");
+            }
+            if (objectSize != 7) {
+                throw std::logic_error("SSD should have 7 as a last dimension");
+            }
+        }
+
+    public:
+        /**
+         * @brief Construct a new SSD object
+         * @details This is a convinient constructor that ensembles constructing methods.
+         * @param model 
+         * @param device 
+         * @param label 
+         */
+        openvino_ssd(const std::string& device, const std::string& model, const std::string& label) {
+            std::ostringstream ss;
+            ss << "IELog" << rand();
+            std::string log_name = ss.str();
+            std::cout << log_name << std::endl;
+            log = spdlog::basic_logger_mt(log_name.c_str(),"logs/IE.txt");
+            log->set_pattern("[%H:%M:%S %z] [%n] [%^---%L---%$] [thread %t] %v");
+            log->info("Log started!");
+            init_plugin(device);
+            load_network(model);
+            init_IO(Precision::U8, Layout::NCHW);
+            load_plugin({});
+            set_labels(label);         
+        }
+
+        std::vector<bbox> detection_parser(network_output &net_out ) override {
+            std::vector<bbox> ret = {}; // return value
+            try {
+                std::chrono::time_point<std::chrono::system_clock> start;
+                std::chrono::time_point<std::chrono::system_clock> end;
+                std::chrono::duration<double,std::milli> elapsed_mil;
                 start = std::chrono::system_clock::now();
-                CDataPtr &output = outputInfor.begin()->second;
-                auto outputName = outputInfor.begin()->first;
-                const SizeVector outputDims = output->getTensorDesc().getDims();
-                const int maxProposalCount = outputDims[2];
-                const int objectSize = outputDims[3];
-                const float *detections = infer_request->GetBlob(outputName)->buffer().as<PrecisionTrait<Precision::FP32>::value_type*>();
+                auto infer_request = net_out.infer_request;
+                auto width = net_out.width;
+                auto height = net_out.height;
+                auto outputInfo = OutputsDataMap(network.getOutputsInfo());
+                auto output_name = outputInfo.begin()->first;
+                auto blob = infer_request->GetBlob(output_name);
+                const float *detections = blob->buffer().as<PrecisionTrait<Precision::FP32>::value_type*>();
+                auto dims = blob->dims();
+                // for (auto &v : dims) {
+                //     std::cout << v << " " << std::endl;
+                // }
+                const int maxProposalCount = dims[1];
+                const int objectSize = dims[0];
                 for (int i = 0; i < maxProposalCount; i++) {
                     float image_id = detections[i * objectSize + 0];
                     if (image_id < 0) {
@@ -391,24 +415,18 @@ namespace ie {
                 return ret;
             }
             catch (const cv::Exception &e) {
-                // let not opencv silly exception terminate our program
                 std::cerr << "Error: " << e.what() << std::endl;
                 return ret;
             }
         }
+        using ptr = std::shared_ptr<openvino_ssd>;
+    }; // class openvino_ssd
 
-        /**
-         * @brief Pointer type to object is default shared_pointer
-         * 
-         */
-        using ptr = std::shared_ptr<ssd>;
-    };
-    
     /**
      * @brief YOLO v3 object detection network
      * 
      */
-    class yolo : public inference_engine {
+    class openvino_yolo : public openvino_inference_engine {
     private:
         /**
          * @brief Yolo detection object 
@@ -539,20 +557,9 @@ namespace ie {
                 }
             }
         }
+    protected:
+
     public:
-        /**
-         * @brief Init the input of the model
-         * @details Like SSD, YOLO have only one input
-         * @param precision 
-         * @param layout
-         */
-        void init_IO(Precision p, InferenceEngine::Layout layout) override {
-            auto inputInfo = InputsDataMap(network.getInputsInfo());
-            InputInfo::Ptr& input = inputInfo.begin()->second;
-            std::cout << inputInfo.begin()->first << std::endl;
-            input->setPrecision(p);
-            input->getInputData()->setLayout(layout);
-        }
         /**
          * @brief Construct a new YOLO v3 object
          * @details This is a convinient constructor that ensembles all constructing methods.
@@ -560,7 +567,7 @@ namespace ie {
          * @param device 
          * @param label 
          */
-        yolo(const std::string& device, const std::string& model, const std::string& label) {
+        openvino_yolo(const std::string& device, const std::string& model, const std::string& label) {
             std::ostringstream ss;
             ss << "IELog" << rand();
             std::string log_name = ss.str();
@@ -574,49 +581,26 @@ namespace ie {
             load_plugin({});
             set_labels(label);         
         }
-        /**
-         * @brief run detection with YOLO
-         * 
-         * @param data 
-         * @param size 
-         * @return std::vector<bbox> 
-         */
-        std::vector<bbox> run_detection (const char* data, int size) override {
+
+        std::vector<bbox> detection_parser(network_output &net_out ) final {
             std::vector<bbox> ret;
             try {
                 std::chrono::time_point<std::chrono::system_clock> start;
                 std::chrono::time_point<std::chrono::system_clock> end;
                 std::chrono::duration<double,std::milli> elapsed_mil;
-
-                // decode out image
                 start = std::chrono::system_clock::now();
-                cv::Mat frame = cv::imdecode(cv::Mat(1,size,CV_8UC3, (unsigned char*) data),cv::IMREAD_UNCHANGED);
-                const int width = frame.size().width;
-                const int height = frame.size().height;
-                end = std::chrono::system_clock::now();
-                elapsed_mil = end - start;
-                log->debug("Decode image in {} ms", elapsed_mil.count());
-
-                // create new request
-                start = std::chrono::system_clock::now();
-                InferRequest::Ptr infer_request = exe_network.CreateInferRequestPtr();
-                auto inputInfor = exe_network.GetInputsInfo();
-                auto outputInfor = exe_network.GetOutputsInfo();
-                frameToBlob(frame, infer_request, inputInfor.begin()->first);
-                
-                // do inference
-                infer_request->Infer();
-                end = std::chrono::system_clock::now(); // sync mode only
-                elapsed_mil = end - start;
-                log->debug("Create and do inference request in {} ms", elapsed_mil.count());
-                
+                auto infer_request = net_out.infer_request;
+                auto width = net_out.width;
+                auto height = net_out.height;        
                 // process YOLO output, it's quite complicated though
+                auto input_info = exe_network.GetInputsInfo();
+                auto output_info = exe_network.GetOutputsInfo();        
                 start = std::chrono::system_clock::now();
-                unsigned long resized_im_h = inputInfor.begin()->second.get()->getDims()[0];
-                unsigned long resized_im_w = inputInfor.begin()->second.get()->getDims()[1];
+                unsigned long resized_im_h = input_info.begin()->second.get()->getDims()[0];
+                unsigned long resized_im_w = input_info.begin()->second.get()->getDims()[1];
                 std::vector<detection_object> objects;
                 // Parsing outputs
-                for (auto &output : outputInfor) {
+                for (auto &output : output_info) {
                     auto output_name = output.first;
                     CNNLayerPtr layer = get_layer(output_name.c_str());
                     Blob::Ptr blob = infer_request->GetBlob(output_name);
@@ -662,44 +646,23 @@ namespace ie {
          * @brief 
          * 
          */
-        using ptr = std::shared_ptr<yolo>;
-    };
+        using ptr = std::shared_ptr<openvino_yolo>;
+    }; // class openvino_yolo
 
-    /*
-        Fast r cnn inferencer
-    */
-
-    class faster_r_cnn : public inference_engine {
-    private:
-        int input_width;
-        int input_height;
+    /**
+     * @brief 
+     * 
+     */
+    class openvino_frcnn : public openvino_inference_engine {
     public:
         /**
-         * @brief Init IO for faster RCNN
-         * @details Different from SSD or YOLO, RCNN family can have two inputs, one is image tensor [NCHW] and one is image info [HW{S}]. The image tensor can be init similar to SSD or YOLO, the image info is just a placeholder of H and W
+         * @brief Construct a new openvino frcnn object
          * 
-         * @param p 
-         * @param layout 
+         * @param device 
+         * @param model 
+         * @param label 
          */
-        void init_IO(Precision p, InferenceEngine::Layout layout) override {
-            auto inputInfo = InputsDataMap(network.getInputsInfo());
-            for (auto &item : inputInfo) {
-                if (item.second->getInputData()->getTensorDesc().getDims().size() == 4) {
-                    // this is image tensor
-                    item.second->setPrecision(p);
-                    item.second->setLayout(layout);
-                    // save input image for later used
-                    input_width = item.second->getInputData()->getTensorDesc().getDims()[2];
-                    input_height = item.second->getInputData()->getTensorDesc().getDims()[3];
-                }
-                else if (item.second->getInputData()->getTensorDesc().getDims().size() == 2) {
-                    // this is image info 
-                    item.second->setPrecision(Precision::FP32);
-                }
-            }
-        }
-
-        faster_r_cnn(const std::string& device, const std::string& model, const std::string& label) {
+        openvino_frcnn(const std::string& device, const std::string& model, const std::string& label) {
             std::ostringstream ss;
             ss << "IELog" << rand();
             std::string log_name = ss.str();
@@ -713,82 +676,28 @@ namespace ie {
             load_plugin({});
             set_labels(label);         
         }
-
-        void IO_sanity_check() override {
-            // Input Blob
-            auto inputInfo = exe_network.GetInputsInfo();
-            if (inputInfo.size() != 2) {
-                throw std::logic_error("Current version of Faster R-CNN accepts networks having two inputs: image_tensor and image_info");
-            }
-
-            // Output Blob
-            auto outputInfo = exe_network.GetOutputsInfo();
-            // Faster R-CNN has two head: cls_score and bbox_pred; however they are all unified in a 
-            // detection output layer which do nms
-            if (outputInfo.size() != 1) {
-                throw std::logic_error("Faster R-CNN must have one outputs");
-            }
-            CDataPtr& output = outputInfo.begin()->second;
-            const SizeVector outputDims = output->getTensorDesc().getDims();
-            const int objectSize = outputDims[3];
-            if (objectSize != 7) {
-                throw std::logic_error("Faster R-CNN should have 7 as a last dimension");
-            }
-            if (outputDims.size() != 4) {
-                throw std::logic_error("Incorrect output dimensions for Faster R-CNN");
-            }
-        }
-        std::vector<bbox> run_detection(const char* data, int size) override {
-            IO_sanity_check();
-            std::vector<bbox> ret; // return value
+        
+        // override default detection parser
+        std::vector<bbox> detection_parser(network_output &net_out ) final {
+            std::vector<bbox> ret = {}; // return value
             try {
                 std::chrono::time_point<std::chrono::system_clock> start;
                 std::chrono::time_point<std::chrono::system_clock> end;
                 std::chrono::duration<double,std::milli> elapsed_mil;
-
-                // decode out image
                 start = std::chrono::system_clock::now();
-                cv::Mat frame = cv::imdecode(cv::Mat(1,size,CV_8UC3, (unsigned char*) data),cv::IMREAD_UNCHANGED);
-                const int width = frame.size().width;
-                const int height = frame.size().height;
-                end = std::chrono::system_clock::now();
-                elapsed_mil = end - start;
-                log->debug("Decode image in {} ms", elapsed_mil.count());
-
-                // create new request
-                start = std::chrono::system_clock::now();
-                InferRequest::Ptr infer_request = exe_network.CreateInferRequestPtr();
-                auto inputInfo = exe_network.GetInputsInfo();
-                auto outputInfo = exe_network.GetOutputsInfo();
-                for (auto it = inputInfo.begin(); it != inputInfo.end(); it++) {
-                    auto name = it->first;
-                    auto input = it->second;
-                    if (input->getTensorDesc().getDims().size() == 4) {
-                            frameToBlob(frame, infer_request, name);
-                    }
-                    else if (input->getTensorDesc().getDims().size() == 2) {
-                        Blob::Ptr input2 = infer_request->GetBlob(name);
-                        float *p = input2->buffer().as<PrecisionTrait<Precision::FP32>::value_type*>();
-                        p[0] = static_cast<float>(input_width);
-                        p[1] = static_cast<float>(input_height);
-                    }
-                }
-                // frameToBlob(frame, infer_request, inputInfor.begin()->first);
-                
-                // do inference
-                infer_request->Infer();
-                end = std::chrono::system_clock::now(); // sync mode only
-                elapsed_mil = end - start;
-                log->debug("Create and do inference request in {} ms", elapsed_mil.count());
-                
-                // process output
-                start = std::chrono::system_clock::now();
-                CDataPtr &output = outputInfo.begin()->second;
-                auto outputName = outputInfo.begin()->first;
-                const SizeVector outputDims = output->getTensorDesc().getDims();
-                const int maxProposalCount = outputDims[2];
-                const int objectSize = outputDims[3];
-                const float *detections = infer_request->GetBlob(outputName)->buffer().as<PrecisionTrait<Precision::FP32>::value_type*>();
+                auto infer_request = net_out.infer_request;
+                auto width = net_out.width;
+                auto height = net_out.height;
+                auto outputInfo = OutputsDataMap(network.getOutputsInfo());
+                auto output_name = outputInfo.begin()->first;
+                auto blob = infer_request->GetBlob(output_name);
+                const float *detections = blob->buffer().as<PrecisionTrait<Precision::FP32>::value_type*>();
+                auto dims = blob->dims();
+                // for (auto &v : dims) {
+                //     std::cout << v << " " << std::endl;
+                // }
+                const int maxProposalCount = dims[1];
+                const int objectSize = dims[0];
                 for (int i = 0; i < maxProposalCount; i++) {
                     float image_id = detections[i * objectSize + 0];
                     if (image_id < 0) {
@@ -802,7 +711,7 @@ namespace ie {
                     int ymax = detections[i * objectSize + 6] * height;
                     auto label = labels[label_id-1];
 
-                    if (confidence > 0.5) {
+                    if (confidence > 0.45) {
                         bbox d;
                         d.prop = confidence;
                         d.label_id = label_id;
@@ -820,122 +729,36 @@ namespace ie {
                 return ret;
             }
             catch (const cv::Exception &e) {
-                // let not opencv silly exception terminate our program
                 std::cerr << "Error: " << e.what() << std::endl;
                 return ret;
             }
         }
-        
-        using ptr = std::shared_ptr<faster_r_cnn>;
-    };
 
-
-    /**
-     * @brief 
-     * 
-     */
-    class resnet101 : public inference_engine {
-
-    };
-
-    /**
-     * @brief 
-     * 
-     */
-    class mask_r_cnn :  public inference_engine {
-
-    };
-
-    /**
-     * @brief 
-     * 
-     */
-    class fcn16 :  public inference_engine {
-        
-    };
-
-    /**
-     * @brief 
-     * 
-     */
-    class ie_factory {
-    public:
-        /**
-         * @brief 
-         * 
-         */
-        enum model_code {
-            SSD = 0,
-            YOLOv3 = 1,
-            RCNN = 2,
-        };
-        enum device_code {
-            CPU = 0,
-            FPGA = 1,
-            GPU = 2,
-        };
-        model_code str2mcode(const std::string& model_name) {
-            std::string name(model_name);
-            std::transform(model_name.begin(), model_name.end(), name.begin(),
-                           [](unsigned char c) {return std::tolower(c);});
-            if (name == "ssd") {
-                return model_code::SSD;
+        using ptr = std::shared_ptr<openvino_frcnn>;
+    protected:
+        void IO_sanity_check() final {
+            // Input Blob
+            auto input_info = InputsDataMap(network.getInputsInfo());
+            if (input_info.size() != 2) {
+                throw std::logic_error("Current version of Faster R-CNN accepts networks having two inputs: image_tensor and image_info");
             }
-            else if (name == "yolov3") {
-                return model_code::YOLOv3;
+            // Output Blob
+            auto output_info = OutputsDataMap(network.getOutputsInfo());
+            // Faster R-CNN has two head: cls_score and bbox_pred; however they are all unified in a 
+            // detection output layer which do nms
+            if (output_info.size() != 1) {
+                throw std::logic_error("Faster R-CNN must have one outputs");
             }
-            else if (name == "rcnn") {
-                return model_code::RCNN;
+            auto output = output_info.begin()->second;
+            const SizeVector outputDims = output->getTensorDesc().getDims();
+            const int objectSize = outputDims[3];
+            if (objectSize != 7) {
+                throw std::logic_error("Faster R-CNN should have 7 as a last dimension");
             }
-            else {
-                throw st::exception::ie_not_implemented();
+            if (outputDims.size() != 4) {
+                throw std::logic_error("Incorrect output dimensions for Faster R-CNN");
             }
         }
-        device_code str2dcode(const std::string& device) {
-            std::string dev(device);
-            std::transform(device.begin(), device.end(), dev.begin(),
-                           [](unsigned char c) {return std::tolower(c);});
-            if (dev == "cpu") {
-                return device_code::CPU;
-            }
-            else if (dev == "fpga") {
-                return device_code::FPGA;
-            }
-            else if (dev == "gpu") {
-                return device_code::GPU;
-            }
-            else {
-                throw st::exception::ie_not_implemented();
-            }
-        }
-        inference_engine::ptr create_inference_engin(model_code type, device_code dev, 
-                                                     const std::string& model, const std::string& label) {
-            std::string plugin;
-            switch (dev) {
-            case device_code::CPU :
-                plugin = "CPU";
-                break;
-            case device_code::FPGA :
-                plugin = "HETERO:FPGA,CPU";
-                break;
-            default:
-                throw st::exception::ie_not_implemented();
-                break;
-            }
-            switch (type) {
-            case model_code::SSD :
-                return  std::make_shared<ssd>(plugin,model,label);
-                break;
-            case model_code::YOLOv3 :
-                return std::make_shared<yolo>(plugin,model,label);
-                break;
-            case model_code::RCNN :
-                return std::make_shared<faster_r_cnn>(plugin,model,label);
-                break;
-            default :
-                throw st::exception::ie_not_implemented();
-            }
-        }
-    };
-} // namespace st
-} // namespace ie
+    };  // class openvino_frcnn
+}   // namespace ie
+}   // namespace st

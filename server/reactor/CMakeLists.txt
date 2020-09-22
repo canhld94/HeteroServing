@@ -15,6 +15,7 @@ SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")
 add_dependencies(reactor_server ie_cpu_extension)
 
 target_include_directories(reactor_server PRIVATE 
+                            ${CONAN_INCLUDE_DIRS}
                             ${InferenceEngine_INCLUDE_DIRS} 
                             ${OpenCV_INCLUDE_DIRS})
 

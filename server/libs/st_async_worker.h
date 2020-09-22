@@ -35,13 +35,12 @@ namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
 namespace bpt = boost::property_tree;   // from <boots/property_tree>
-using namespace InferenceEngine;
 
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 typedef bpt::ptree JSON;                // just hiding the ugly name
 
 #include "st_ultis.h"
-#include "st_ie2.h"
+#include "st_ie_base.h"
 #include "st_sync.h"
 using namespace st::sync;
 using namespace st::ie;
@@ -80,12 +79,11 @@ using http_mq = blocking_queue<http_conn::ptr>;
 
 struct inference_output {
     tcp::socket sock;
-    network_output net_out;
-    inference_engine::ptr ie;
+    std::vector<bbox> bboxes;
     inference_output() = delete;
     inference_output(inference_output& other) = delete;
-    inference_output(tcp::socket &&_sock,network_output &&_net_out, inference_engine::ptr _ie) :
-        sock(std::move(_sock)), net_out(std::move(_net_out)), ie(std::move(_ie)) {};
+    inference_output(tcp::socket &&_sock, std::vector<bbox> _bboxes) :
+        sock(std::move(_sock)), bboxes(std::move(_bboxes)) {};
     using ptr = std::shared_ptr<inference_output>;
 };
 using response_mq = blocking_queue<inference_output::ptr>;
@@ -439,10 +437,9 @@ namespace worker {
                     auto data = body.data();
                     int size = body.size();
                     // run the blob
-                    auto net_out = Ie->run(data,size);
+                    auto detection_out = Ie->run_detection(data,size);
                     // push to resq
-                    inference_engine::ptr ie = Ie;
-                    resq->push(std::make_shared<inference_output>(std::move(sock),std::move(net_out),std::move(ie)));
+                    resq->push(std::make_shared<inference_output>(std::move(sock),std::move(detection_out)));
                 }
             }
             catch (const std::exception& e) {
@@ -466,12 +463,9 @@ namespace worker {
                     // it's ok because async_pp_worker can only access public member 
                     // of inference engine
                     auto infer_out = resq->pop();
-                    auto &ie = infer_out->ie;
-                    auto &net_out = infer_out->net_out;
+                    auto &detection_out = infer_out->bboxes;
                     auto &sock = infer_out->sock; 
                     send_lambda<tcp::socket> sender{sock,close,ec};
-                    // we should parse infer_req, and move to sock
-                    auto detection_out = ie->detection_parser(net_out);
                     // create response and send throught the socket
                     int n = detection_out.size();
                     // create property tree and write to json

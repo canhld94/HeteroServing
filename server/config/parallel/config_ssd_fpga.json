@@ -5,7 +5,7 @@
       {
         "name": "ssd",
         "device": "fpga",
-        "model": "/home/canhld/workplace/InferenceServer/openvino_models/dota/ssdlite_mobilenet_v2_dota_fp16.xml",
+        "model": "/home/canhld/workplace/InferenceServer/openvino_models/dota/ssd608_mobilenet_v2_dota_fp16.xml",
         "labels": "/home/canhld/workplace/InferenceServer/openvino_models/dota/dota_ssd.txt",
         "fpga configuration": {
           "dev": "acla0",

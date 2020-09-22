@@ -18,7 +18,8 @@
 #include <stdlib.h> 
 #include "st_ultis.h"
 #include "st_sync_worker.h"
-#include "st_ie.h"
+#include "st_ie_base.h"
+#include "st_ie_factory.h"
 #include "st_exception.h"
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
@@ -117,7 +118,7 @@ int main(int argc, char const *argv[])
         ie_factory factory;
         for (auto it = ie_array.begin(); it != ie_array.end(); ++it) {
             auto ie = it->second;
-            const std::string name = ie.get<std::string>("name");
+            const std::string &name = ie.get<std::string>("name");
             const std::string &device = ie.get<std::string>("device");
             const std::string &model = ie.get<std::string>("model");
             const std::string &labels = ie.get<std::string>("labels");
@@ -135,9 +136,7 @@ int main(int argc, char const *argv[])
                 // setenv("DLA_AOCX",bitstream.c_str(),0);
                 setenv("CL_CONTEXT_COMPILER_MODE_INTELFPGA","3",0);
             }
-            auto mcode = factory.str2mcode(name);
-            auto dcode = factory.str2dcode(device);
-            IEs.push_back(factory.create_inference_engin(mcode,dcode,model,labels));
+            IEs.push_back(factory.create_inference_engine(name,device,model,labels));
         }
 
         // task queue - Not necessary used with CPU inference
