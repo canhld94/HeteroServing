@@ -10,8 +10,6 @@
 #include <boost/config.hpp>
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/lexical_cast.hpp>
-#include <algorithm>
-#include <cstdlib>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -19,10 +17,8 @@
 #include <thread>
 #include <vector>
 #include <sstream>
-#include <chrono>
-#include <ctime>
-#include <mutex>
-#include <condition_variable>
+#include <set>
+
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
 
@@ -74,14 +70,7 @@ namespace worker {
      */
     template <class IEPtr>
     class sync_inference_worker : public sync_worker {
-    private:
-        IEPtr Ie;                                           //!< pointer to inference engine
-        object_detection_mq<single_bell>::ptr taskq;        //!< task queue, will get job in this queue
     public:
-        /**
-         * @brief Construct a new inference worker object
-         * 
-         */
         sync_inference_worker() = delete;
         /**
          * @brief Construct a new inference worker object
@@ -93,24 +82,16 @@ namespace worker {
          * @param _key 
          */
         sync_inference_worker(IEPtr& _Ie, object_detection_mq<single_bell>::ptr& _taskq):
-                        Ie(_Ie), taskq(_taskq)
-                        {
+                        Ie(_Ie), taskq(_taskq) {
                             spdlog::info("Init inference worker!");
                         }
-        
         /**
          * @brief Destroy the inference worker object
          * 
          */
-        ~sync_inference_worker() {
-
-        }
-
-        /**
-         * @brief 
-         * 
-         */
-        void operator()() { 
+        ~sync_inference_worker() {}
+        // sync worker public interface implementation
+        void operator()() final { 
             pthread_setname_np(pthread_self(),"IE worker");
             // start listening to the queue
             try {
@@ -129,6 +110,10 @@ namespace worker {
                 std::cerr << e.what() << '\n';
             }
         }
+
+    private:
+        IEPtr Ie;                                           //!< pointer to inference engine
+        object_detection_mq<single_bell>::ptr taskq;        //!< task queue, will get job in this queue
     };
 
     /**
@@ -139,17 +124,7 @@ namespace worker {
      * 
      */
     class sync_http_worker : public sync_worker {
-    private:
-        tcp::acceptor& acceptor;                                //!< the acceptor, needed to init our socket
-        tcp::socket sock{acceptor.get_executor()};              //!< the endpoint socket, passed from main thread
-        void *data;                                             //!< pointer to data, i.e dashboard
-        object_detection_mq<single_bell>::ptr taskq;            //!< task queue
-        single_bell::ptr bell;                                  //!< notify bell
     public:
-        /**
-         * @brief Construct a new http worker object
-         * 
-         */
         sync_http_worker() = delete;
 
         /**
@@ -167,24 +142,25 @@ namespace worker {
                         bell = std::make_shared<single_bell>();
                         spdlog::info("Init new http worker!");
                     }
-        
         /**
          * @brief 
          * 
          * @return * Default 
          */
         ~sync_http_worker() {}
-
-        /**
-         * @brief 
-         * 
-         * @return * Start 
-         */
-        void operator()() {
+        // sync worker public interface implementation
+        void operator()() final {
             pthread_setname_np(pthread_self(),"http worker");
             session_handler();
         }
     private:
+        // private attribute
+        tcp::acceptor& acceptor;                                //!< the acceptor, needed to init our socket
+        tcp::socket sock{acceptor.get_executor()};              //!< the endpoint socket, passed from main thread
+        void *data;                                             //!< pointer to data, i.e dashboard
+        object_detection_mq<single_bell>::ptr taskq;            //!< task queue
+        single_bell::ptr bell;                                  //!< notify bell
+        // private method
         /**
         * @brief This funtion generate error response 
         * @details Depend on the type of error status, different responses messages are generated
@@ -204,10 +180,8 @@ namespace worker {
             res.body() = std::string(why);
             res.prepare_payload();
             return res;
-        } //! error_message
-
-
-    /**
+        } // error_message
+        /**
         * @brief This function resolve the request target to route it to proper resource.
         * 
         * @param target 
@@ -244,14 +218,12 @@ namespace worker {
                 ec = beast::errc::make_error_code(beast::errc::no_such_file_or_directory);
             }
             return ret;
-        } //! request_sovle
-
+        } // request_sovle
         /**
          * @brief 
          * 
          */
-        std::string
-        greeting () {
+        std::string greeting () {
             JSON res;
             res.put<std::string>("type","greeting");
             res.put<std::string>("from","canhld@kaist.ac.kr");
@@ -263,16 +235,14 @@ namespace worker {
             std::ostringstream ss;
             bpt::write_json(ss,res);
             return ss.str();
-        } //! greeting
-
+        } // greeting
         /**
          * @brief 
          * 
          *
          * TODO: Implement the function with proper resource
         */
-        std::string 
-        metadata_request_handler () {
+        std::string metadata_request_handler () {
             std::ostringstream ss;
             ss.str("");
             ss << std::fixed << "{\n"
@@ -280,15 +250,12 @@ namespace worker {
             << "\"message\": \"this is metadata request\"\n"
             << "}\n";
             return ss.str();
-        } //! metadata_request_handler
-
+        } // metadata_request_handler
         /**
          * @brief This funtion handles the inference request at POST /inference
          * ?All request return string body, so its return type is std::string should we format it with JSON?
          */
-
-        std::string 
-        inference_request_handler (beast_basic_request & req) {
+        std::string inference_request_handler (beast_basic_request & req) {
             // we know this is the post method
             // now, first extact the content-type
 
@@ -343,9 +310,7 @@ namespace worker {
             std::ostringstream ss;
             bpt::write_json(ss,res);
             return ss.str();
-        } //! inferennce_request_handler
-
-
+        } // inferennce_request_handler
         /**
          * @brief this is our handler
          * 
@@ -432,21 +397,9 @@ namespace worker {
                 res.keep_alive(req.keep_alive());
                 sender(std::move(res));
             }
-        } //! request_handler
-
+        } // request_handler
         /**
-         * @brief 
-         * 
-         * @param ec 
-         * @param what 
-         * @return * Report 
-         */
-        void fail(beast::error_code ec, char const* what) {
-            std::cerr << what << ": " << ec.message() << "\n";
-        } //! fail
-
-        /**
-         * @brief 
+         * @brief handler the session
          * 
          * @return * Session 
          */
@@ -491,18 +444,48 @@ namespace worker {
             spdlog::info("[HTTPW] Shutdown my socket!");
             sock.shutdown(tcp::socket::shutdown_send,ec);
             return;
-        } //! session_handler
-    }; //! class sync_http_worker
+        } // session_handler
+    }; // class sync_http_worker
 
     /**
      * @brief listening worker that will listen to connection
      * 
      */
-    class sync_listen_worker {
+    class sync_listen_worker : public sync_worker {
+    public:
+        sync_listen_worker() = delete;
+        /**
+         * @brief Construct a new listen worker object
+         * 
+         * @param _taskq 
+         */
+        sync_listen_worker(object_detection_mq<single_bell>::ptr& _taskq):
+                    taskq(_taskq) {}
+        /**
+         * @brief Destroy the listen worker object
+         * 
+         */
+        ~sync_listen_worker() {}
+        // sync worker public interface implementation
+        void operator()() final {
+            pthread_setname_np(pthread_self(),"listen worker");
+            std::cout << "Warning: no IP and address is provide" << std::endl;
+            std::cout << "Use defaul address 0.0.0.0 and default port 8080" << std::endl;
+            listen("0.0.0.0","8080");
+
+        }
+        /**
+         * @brief additional public interface
+         * 
+         * @param ip 
+         * @param port 
+         */
+        void operator()(std::string& ip, std::string& port) {
+            pthread_setname_np(pthread_self(),"listen worker");
+            listen(ip.c_str(),port.c_str());
+        }
     private: 
         object_detection_mq<single_bell>::ptr taskq;    //!< task queue
-
-    private:
         /**
          * @brief 
          * 
@@ -522,6 +505,7 @@ namespace worker {
                 tcp::socket sock{ioc};
                 // accep, blocking until new connection
                 acceptor.accept(sock);
+                std::cout << "New client: " << sock.remote_endpoint().address().to_string() << std::endl;
                 // launch new http worker to handle new request
                 // transfer ownership of socket to the worker
                 auto f = [&](tcp::socket& _sock){
@@ -533,51 +517,7 @@ namespace worker {
                     }.detach();
             }
         }
-    public:
-        /**
-         * @brief Construct a new listen worker object
-         * 
-         */
-        sync_listen_worker() = delete;
-        /**
-         * @brief Construct a new listen worker object
-         * 
-         * @param _taskq 
-         */
-        sync_listen_worker(object_detection_mq<single_bell>::ptr& _taskq):
-                    taskq(_taskq)
-                    {}
-        /**
-         * @brief Destroy the listen worker object
-         * 
-         */
-        ~sync_listen_worker() {
-
-        }
-
-        /**
-         * @brief 
-         * 
-         */
-        void operator()() {
-            pthread_setname_np(pthread_self(),"listen worker");
-            std::cout << "Warning: no IP and address is provide" << std::endl;
-            std::cout << "Use defaul address 0.0.0.0 and default port 8080" << std::endl;
-            listen("0.0.0.0","8080");
-
-        }
-
-        /**
-         * @brief 
-         * 
-         * @param ip 
-         * @param port 
-         */
-        void operator()(std::string& ip, std::string& port) {
-            pthread_setname_np(pthread_self(),"listen worker");
-            listen(ip.c_str(),port.c_str());
-        }
-    }; //! class listen worker
+    }; // class listen worker
 
     /**
      * @brief 

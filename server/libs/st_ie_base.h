@@ -1,51 +1,18 @@
 /***************************************************************************************
  * Copyright (C) 2020 canhld@.kaist.ac.kr
  * SPDX-License-Identifier: Apache-2.0
- * @b About: This file is a wrap-over of Intel OpenVino Inference Engine (and
- * others). It provide an uniform interface of inference engine, so the worker
- * don't need to worry about the underlying implementation of deep learning
- * algorithm in OpenVino or any DL framework. The only thing that workers care 
- * is a class with constructor and an invoking method.
+ * @b About: This file is a generic inference engine interface. It provide an uniform 
+ * interface of inference engine, so the worker don't need to worry about the underlying 
+ * implementation of deep learning algorithm in OpenVino or any DL framework. The only 
+ * thing that workers care is a class with constructor and an invoking method.
  ***************************************************************************************/
 
 #pragma once 
-#include <stdio.h>
-#include <signal.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <errno.h>
-// C++
-#include <gflags/gflags.h>
-#include <functional>
-#include <iostream>
-#include <fstream>
-#include <random>
-#include <memory>
-#include <chrono>
 #include <vector>
 #include <string>
-#include <algorithm>
-#include <iterator>
-#include <mutex>
-#include <utility>
 #include <memory>
-#include <thread>
-#include <csignal>
-#include <algorithm>
-
-// openvino stuff
-#include <inference_engine.hpp>
-#include <opencv2/opencv.hpp>
-#include <ext_list.hpp>
-#include <spdlog/spdlog.h>
-#include <spdlog/sinks/basic_file_sink.h>
-#include "st_exception.h"
+#include <iterator>
+#include <fstream>
 
 /*
 TensorRT and OpenVINO Anatomy

@@ -1,6 +1,8 @@
-
-
-
+/***************************************************************************************
+ * Copyright (C) 2020 canhld@.kaist.ac.kr
+ * SPDX-License-Identifier: Apache-2.0
+ * @b About: This file implement of Intel OpenVino Inference Engine
+ ***************************************************************************************/
 #pragma once
 
 #include <vector>
@@ -83,12 +85,49 @@ namespace ie {
      * 
      */
     class openvino_inference_engine : public inference_engine {
+    public:
+        /****************************************************************/
+        /*  Inference engine public interface implementation            */
+        /****************************************************************/
+
+        std::vector<bbox> run_detection(const char* data, int size) final {
+            auto net_out = do_infer(data,size);
+            return detection_parser(net_out);
+        }
+
+        std::vector<int> run_classification(const char* data, int size) final {
+            auto net_out = do_infer(data,size);
+            return classification_parser(net_out);
+        }
+
+        /**
+         * @brief Parse detection output of a inference request, network specific
+         * 
+         * @param net_out 
+         * @return std::vector<bbox> 
+         */
+        virtual std::vector<bbox> detection_parser (network_output& net_out) {
+            return {};
+        }
+        /**
+         * @brief Parse classification output of a inference request, network specific
+         * 
+         * @param net_out 
+         * @return std::vector<int> 
+         */
+        virtual std::vector<int> classification_parser (network_output& net_out) {
+            return {};
+        }
+
+        using ptr = std::shared_ptr<openvino_inference_engine>;
+
     private:
         /**
          * @brief OpenVino Inference Plugin
          * 
          */
         InferenceEngine::InferencePlugin plugin;
+
     protected:
         /**
          * @brief The logical CNN network
@@ -176,13 +215,11 @@ namespace ie {
             elapsed_mil = end - start;
             log->info("Creating new executable network in {} ms",elapsed_mil.count());
         }
-
         /**
          * @brief Perform sanity check for a network
          * @details This function is virutal and should be overrided for each network
          */
         virtual void IO_sanity_check () {}
-
         /**
          * @brief Init the input of the model
          * @details Most of network only have one single image tensor input, some like
@@ -204,7 +241,6 @@ namespace ie {
                 }
             }
         }
-
         /**
          * @brief Do inference and return the infered request
          * @details 
@@ -232,6 +268,7 @@ namespace ie {
                 auto input_info = exe_network.GetInputsInfo();
                 InferRequest::Ptr infer_request = exe_network.CreateInferRequestPtr();
                 int input_width = -1, input_height = -1;
+                // prepare input blob
                 for (auto it = input_info.begin(); it != input_info.end(); it++) {
                         auto name = it->first;
                         auto input = it->second;
@@ -249,11 +286,12 @@ namespace ie {
                     else if (input->getTensorDesc().getDims().size() == 2) {
                         Blob::Ptr input2 = infer_request->GetBlob(name);
                         float *p = input2->buffer().as<PrecisionTrait<Precision::FP32>::value_type*>();
+                        assert(input_width > 0);
+                        assert(input_height > 0);
                         p[0] = static_cast<float>(input_width);
                         p[1] = static_cast<float>(input_height);
                     }
                 }
-                
                 // do inference
                 infer_request->Infer();
                 end = std::chrono::system_clock::now(); // sync mode only
@@ -276,71 +314,12 @@ namespace ie {
         CNNLayerPtr get_layer(const char* name) {
             return network.getLayerByName(name);
         }
-
-    public:
-        /**
-         * @brief Parse detection output of a inference request, network specific
-         * 
-         * @param net_out 
-         * @return std::vector<bbox> 
-         */
-        virtual std::vector<bbox> detection_parser (network_output& net_out) {
-            return {};
-        }
-
-        /**
-         * @brief Parse classification output of a inference request, network specific
-         * 
-         * @param net_out 
-         * @return std::vector<int> 
-         */
-        virtual std::vector<int> classification_parser (network_output& net_out) {
-            return {};
-        }
-
-        /****************************************************************/
-        /*  Inference engine public interface implementation            */
-        /****************************************************************/
-
-        std::vector<bbox> run_detection(const char* data, int size) final {
-            auto net_out = do_infer(data,size);
-            return detection_parser(net_out);
-        }
-        std::vector<int> run_classification(const char* data, int size) final {
-            auto net_out = do_infer(data,size);
-            return classification_parser(net_out);
-        }
-        using ptr = std::shared_ptr<openvino_inference_engine>;
     };
 
     /**
      * @brief SSD object detection network
      */
     class openvino_ssd : public openvino_inference_engine {
-    protected:
-        // override IO_snaity_check for SSD
-        void IO_sanity_check() final {
-            // Input Blob
-            auto input_info = InputsDataMap(network.getInputsInfo());
-            if (input_info.size() != 1) {
-                throw std::logic_error("SSD has only one input");
-            }
-            // Output Blob
-            auto output_info = OutputsDataMap(network.getOutputsInfo());
-            if (output_info.size() != 1) {
-                throw std::logic_error("SSD has only one output");
-            }
-            auto output = output_info.begin()->second;
-            const SizeVector outputDims = output->getTensorDesc().getDims();
-            const int objectSize = outputDims[3];
-            if (outputDims.size() != 4) {
-                throw std::logic_error("Incorrect output dimensions for SSD");
-            }
-            if (objectSize != 7) {
-                throw std::logic_error("SSD should have 7 as a last dimension");
-            }
-        }
-
     public:
         /**
          * @brief Construct a new SSD object
@@ -363,8 +342,8 @@ namespace ie {
             load_plugin({});
             set_labels(label);         
         }
-
-        std::vector<bbox> detection_parser(network_output &net_out ) override {
+        // detection parser implementation for ssd
+        std::vector<bbox> detection_parser(network_output &net_out ) final {
             std::vector<bbox> ret = {}; // return value
             try {
                 std::chrono::time_point<std::chrono::system_clock> start;
@@ -379,9 +358,6 @@ namespace ie {
                 auto blob = infer_request->GetBlob(output_name);
                 const float *detections = blob->buffer().as<PrecisionTrait<Precision::FP32>::value_type*>();
                 auto dims = blob->dims();
-                // for (auto &v : dims) {
-                //     std::cout << v << " " << std::endl;
-                // }
                 const int maxProposalCount = dims[1];
                 const int objectSize = dims[0];
                 for (int i = 0; i < maxProposalCount; i++) {
@@ -419,7 +395,32 @@ namespace ie {
                 return ret;
             }
         }
+
         using ptr = std::shared_ptr<openvino_ssd>;
+
+    protected:
+        // IO_snaity_check for SSD
+        void IO_sanity_check() final {
+            // Input Blob
+            auto input_info = InputsDataMap(network.getInputsInfo());
+            if (input_info.size() != 1) {
+                throw std::logic_error("SSD has only one input");
+            }
+            // Output Blob
+            auto output_info = OutputsDataMap(network.getOutputsInfo());
+            if (output_info.size() != 1) {
+                throw std::logic_error("SSD has only one output");
+            }
+            auto output = output_info.begin()->second;
+            const SizeVector outputDims = output->getTensorDesc().getDims();
+            const int objectSize = outputDims[3];
+            if (outputDims.size() != 4) {
+                throw std::logic_error("Incorrect output dimensions for SSD");
+            }
+            if (objectSize != 7) {
+                throw std::logic_error("SSD should have 7 as a last dimension");
+            }
+        }
     }; // class openvino_ssd
 
     /**
@@ -427,6 +428,92 @@ namespace ie {
      * 
      */
     class openvino_yolo : public openvino_inference_engine {
+    public:
+        /**
+         * @brief Construct a new YOLO v3 object
+         * @details This is a convinient constructor that ensembles all constructing methods.
+         * @param model 
+         * @param device 
+         * @param label 
+         */
+        openvino_yolo(const std::string& device, const std::string& model, const std::string& label) {
+            std::ostringstream ss;
+            ss << "IELog" << rand();
+            std::string log_name = ss.str();
+            std::cout << log_name << std::endl;
+            log = spdlog::basic_logger_mt(log_name.c_str(),"logs/IE.txt");
+            log->set_pattern("[%H:%M:%S %z] [%n] [%^---%L---%$] [thread %t] %v");
+            log->info("Log started!");
+            init_plugin(device);
+            load_network(model);
+            init_IO(Precision::U8, Layout::NCHW);
+            load_plugin({});
+            set_labels(label);         
+        }
+        // detection parser implementation for yolo
+        std::vector<bbox> detection_parser(network_output &net_out ) final {
+            std::vector<bbox> ret;
+            try {
+                std::chrono::time_point<std::chrono::system_clock> start;
+                std::chrono::time_point<std::chrono::system_clock> end;
+                std::chrono::duration<double,std::milli> elapsed_mil;
+                start = std::chrono::system_clock::now();
+                auto infer_request = net_out.infer_request;
+                auto width = net_out.width;
+                auto height = net_out.height;        
+                // process YOLO output, it's quite complicated though
+                auto input_info = exe_network.GetInputsInfo();
+                auto output_info = exe_network.GetOutputsInfo();        
+                start = std::chrono::system_clock::now();
+                unsigned long resized_im_h = input_info.begin()->second.get()->getDims()[0];
+                unsigned long resized_im_w = input_info.begin()->second.get()->getDims()[1];
+                std::vector<detection_object> objects;
+                // Parsing outputs
+                for (auto &output : output_info) {
+                    auto output_name = output.first;
+                    CNNLayerPtr layer = get_layer(output_name.c_str());
+                    Blob::Ptr blob = infer_request->GetBlob(output_name);
+                    parse_yolov3_output(layer, blob, resized_im_h, resized_im_w, height, width, 0.5, objects);
+                }
+                // Filtering overlapping boxes
+                std::sort(objects.begin(), objects.end(), std::greater<detection_object>());
+                for (size_t i = 0; i < objects.size(); ++i) {
+                    if (objects[i].confidence == 0)
+                        continue;
+                    for (size_t j = i + 1; j < objects.size(); ++j)
+                        if (intersection_over_union(objects[i], objects[j]) >= 0.4)
+                            objects[j].confidence = 0;
+                }
+                // Get the bboxes
+                for (auto &object : objects) {
+                    bbox d;
+                    if (object.confidence < 0.5)
+                        continue;
+                    auto label_id = object.class_id+1;
+                    auto label = labels[label_id-1];
+                    float confidence = object.confidence;
+                    d.prop = confidence;
+                    d.label_id = label_id;
+                    d.label = label;
+                    d.c[0] = object.xmin;
+                    d.c[1] = object.ymin;
+                    d.c[2] = object.xmax;
+                    d.c[3] = object.ymax;
+                    ret.push_back(d);
+                }
+                end = std::chrono::system_clock::now(); // sync mode only
+                elapsed_mil = end - start;
+                log->debug("Parsing network output in {} ms", elapsed_mil.count());
+                return ret;
+            }
+            catch(const cv::Exception& e) {
+                std::cerr << e.what() << '\n';
+                return ret;
+            }
+        }
+
+        using ptr = std::shared_ptr<openvino_yolo>;
+
     private:
         /**
          * @brief Yolo detection object 
@@ -467,6 +554,13 @@ namespace ie {
             int loc = location % (side * side);
             return n * side * side * (lcoords + lclasses + 1) + entry * side * side + loc;
         }
+        /**
+         * @brief IOU
+         * 
+         * @param box_1 
+         * @param box_2 
+         * @return double 
+         */
         double intersection_over_union(const detection_object &box_1, const detection_object &box_2) {
             double width_of_overlap_area = fmin(box_1.xmax, box_2.xmax) - fmax(box_1.xmin, box_2.xmin);
             double height_of_overlap_area = fmin(box_1.ymax, box_2.ymax) - fmax(box_1.ymin, box_2.ymin);
@@ -557,96 +651,6 @@ namespace ie {
                 }
             }
         }
-    protected:
-
-    public:
-        /**
-         * @brief Construct a new YOLO v3 object
-         * @details This is a convinient constructor that ensembles all constructing methods.
-         * @param model 
-         * @param device 
-         * @param label 
-         */
-        openvino_yolo(const std::string& device, const std::string& model, const std::string& label) {
-            std::ostringstream ss;
-            ss << "IELog" << rand();
-            std::string log_name = ss.str();
-            std::cout << log_name << std::endl;
-            log = spdlog::basic_logger_mt(log_name.c_str(),"logs/IE.txt");
-            log->set_pattern("[%H:%M:%S %z] [%n] [%^---%L---%$] [thread %t] %v");
-            log->info("Log started!");
-            init_plugin(device);
-            load_network(model);
-            init_IO(Precision::U8, Layout::NCHW);
-            load_plugin({});
-            set_labels(label);         
-        }
-
-        std::vector<bbox> detection_parser(network_output &net_out ) final {
-            std::vector<bbox> ret;
-            try {
-                std::chrono::time_point<std::chrono::system_clock> start;
-                std::chrono::time_point<std::chrono::system_clock> end;
-                std::chrono::duration<double,std::milli> elapsed_mil;
-                start = std::chrono::system_clock::now();
-                auto infer_request = net_out.infer_request;
-                auto width = net_out.width;
-                auto height = net_out.height;        
-                // process YOLO output, it's quite complicated though
-                auto input_info = exe_network.GetInputsInfo();
-                auto output_info = exe_network.GetOutputsInfo();        
-                start = std::chrono::system_clock::now();
-                unsigned long resized_im_h = input_info.begin()->second.get()->getDims()[0];
-                unsigned long resized_im_w = input_info.begin()->second.get()->getDims()[1];
-                std::vector<detection_object> objects;
-                // Parsing outputs
-                for (auto &output : output_info) {
-                    auto output_name = output.first;
-                    CNNLayerPtr layer = get_layer(output_name.c_str());
-                    Blob::Ptr blob = infer_request->GetBlob(output_name);
-                    parse_yolov3_output(layer, blob, resized_im_h, resized_im_w, height, width, 0.5, objects);
-                }
-                // Filtering overlapping boxes
-                std::sort(objects.begin(), objects.end(), std::greater<detection_object>());
-                for (size_t i = 0; i < objects.size(); ++i) {
-                    if (objects[i].confidence == 0)
-                        continue;
-                    for (size_t j = i + 1; j < objects.size(); ++j)
-                        if (intersection_over_union(objects[i], objects[j]) >= 0.4)
-                            objects[j].confidence = 0;
-                }
-                // Get the bboxes
-                for (auto &object : objects) {
-                    bbox d;
-                    if (object.confidence < 0.5)
-                        continue;
-                    auto label_id = object.class_id+1;
-                    auto label = labels[label_id-1];
-                    float confidence = object.confidence;
-                    d.prop = confidence;
-                    d.label_id = label_id;
-                    d.label = label;
-                    d.c[0] = object.xmin;
-                    d.c[1] = object.ymin;
-                    d.c[2] = object.xmax;
-                    d.c[3] = object.ymax;
-                    ret.push_back(d);
-                }
-                end = std::chrono::system_clock::now(); // sync mode only
-                elapsed_mil = end - start;
-                log->debug("Parsing network output in {} ms", elapsed_mil.count());
-                return ret;
-            }
-            catch(const cv::Exception& e) {
-                std::cerr << e.what() << '\n';
-                return ret;
-            }
-        }
-        /**
-         * @brief 
-         * 
-         */
-        using ptr = std::shared_ptr<openvino_yolo>;
     }; // class openvino_yolo
 
     /**
@@ -677,7 +681,7 @@ namespace ie {
             set_labels(label);         
         }
         
-        // override default detection parser
+        // frcnn detection parser implementation
         std::vector<bbox> detection_parser(network_output &net_out ) final {
             std::vector<bbox> ret = {}; // return value
             try {
@@ -693,9 +697,6 @@ namespace ie {
                 auto blob = infer_request->GetBlob(output_name);
                 const float *detections = blob->buffer().as<PrecisionTrait<Precision::FP32>::value_type*>();
                 auto dims = blob->dims();
-                // for (auto &v : dims) {
-                //     std::cout << v << " " << std::endl;
-                // }
                 const int maxProposalCount = dims[1];
                 const int objectSize = dims[0];
                 for (int i = 0; i < maxProposalCount; i++) {
@@ -735,7 +736,9 @@ namespace ie {
         }
 
         using ptr = std::shared_ptr<openvino_frcnn>;
+
     protected:
+        // IO sanity check for frcnn
         void IO_sanity_check() final {
             // Input Blob
             auto input_info = InputsDataMap(network.getInputsInfo());

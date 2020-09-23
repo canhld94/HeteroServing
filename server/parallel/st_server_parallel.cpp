@@ -11,7 +11,6 @@
 #include <boost/config.hpp>
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/filesystem.hpp>
-#include <inference_engine.hpp>
 #include <gflags/gflags.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
@@ -133,8 +132,8 @@ int main(int argc, char const *argv[])
                 fpga_devs.insert(dev);
                 // bitstream
                 const std::string &bitstream = fpga_conf.get<std::string>("bitstream");
-                // setenv("DLA_AOCX",bitstream.c_str(),0);
-                setenv("CL_CONTEXT_COMPILER_MODE_INTELFPGA","3",0);
+                setenv("DLA_AOCX",bitstream.c_str(),0);
+                // setenv("CL_CONTEXT_COMPILER_MODE_INTELFPGA","3",0);
             }
             IEs.push_back(factory.create_inference_engine(name,device,model,labels));
         }

@@ -1,8 +1,13 @@
-
+/***************************************************************************************
+ * Copyright (C) 2020 canhld@.kaist.ac.kr
+ * SPDX-License-Identifier: Apache-2.0
+ * @b About: This file provide factory method to create inference engine
+ ***************************************************************************************/
 #pragma once
 #include <string>
 #include "st_ie_base.h"
 #include "st_ie_openvino.h"
+#include "st_ie_tensorrt.h"
 
 
 namespace st {
@@ -11,9 +16,17 @@ namespace ie {
      * @brief Factory class to create different type of inference engine
      * 
      */
-    
     class ie_factory {
     public:
+        /**
+         * @brief Create a inference engine object
+         * 
+         * @param model_name 
+         * @param device_name 
+         * @param model 
+         * @param label 
+         * @return inference_engine::ptr 
+         */
         inference_engine::ptr create_inference_engine(const std::string& model_name, 
                                                       const std::string& device_name, 
                                                       const std::string& model, 
@@ -28,20 +41,18 @@ namespace ie {
             }
         }
     private:
-        /**
-         * @brief 
-         * 
-         */
-        enum model_code {
+        enum class model_code {
             SSD = 0,
             YOLOV3 = 1,
             RCNN = 2,
         };
-        enum device_code {
+
+        enum class device_code {
             CPU = 0,
             FPGA = 1,
             GPU = 2,
         };
+        // convert string to model code
         model_code str2mcode(const std::string& model_name) {
             std::string model(model_name);
             std::transform(model_name.begin(), model_name.end(), model.begin(),
@@ -59,6 +70,7 @@ namespace ie {
                 throw st::exception::ie_not_implemented();
             }
         }
+        // convert string to device code
         device_code str2dcode(const std::string& device_name) {
             std::string dev(device_name);
             std::transform(device_name.begin(), device_name.end(), dev.begin(),
@@ -76,6 +88,7 @@ namespace ie {
                 throw st::exception::ie_not_implemented();
             }
         }
+        // create openvino inference engine
         inference_engine::ptr create_openvino_engine(model_code type, 
                                                       device_code dev, 
                                                       const std::string& model, 
@@ -106,7 +119,7 @@ namespace ie {
                 throw st::exception::ie_not_implemented();
             }
         }
-    
+        // create tensorrt inference engine object
         inference_engine::ptr create_tensorrt_engine(model_code type,
                                                      const std::string& model, 
                                                      const std::string& label) {

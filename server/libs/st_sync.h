@@ -6,20 +6,12 @@
  ***************************************************************************************/
 
 #pragma once 
-#include <algorithm>
-#include <cstdlib>
-#include <functional>
-#include <iostream>
 #include <memory>
 #include <string>
-#include <thread>
 #include <vector>
-#include <sstream>
-#include <fstream>
-#include <chrono>
-#include <ctime>
 #include <mutex>
 #include <condition_variable>
+#include <deque>
 #include "st_ie_base.h"
 
 using st::ie::bbox;
