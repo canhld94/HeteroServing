@@ -42,6 +42,9 @@ TensorRT workflows:
     - processing the output
 
 In openvino, we have very little thing to deal with input and output blobs
+In openvino, we can associate input and output blobs with a inference request
+In TensorRT, I don't know we can do it or not, or at least there is no instant
+way to do it right now.
 */
 
 namespace st {
@@ -60,7 +63,8 @@ namespace ie {
 
     /**
      * @brief Generic Inference Engine Interface
-     * 
+     * @details Similar to tensorflow servable, but focus on object detection 
+     * and clasification
      */
     class inference_engine {
     public:

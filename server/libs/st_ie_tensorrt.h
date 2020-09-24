@@ -20,6 +20,29 @@ using namespace nvinfer1;
 
 namespace st {
 namespace ie {
+    class logger : public ILogger {
+        void log(Severity serverity, const char *msg) {
+            if (serverity != Severity::kINFO) {
+                std::cout << msg << std::endl;
+            }
+        }
+    } glogger; // global logger
+
+    struct trt_object_deleter {
+    template <typename T>
+        void operator()(T* obj) const {
+            if (obj)
+            {
+                obj->destroy();
+            }
+        }
+    };
+    template <class T>
+    using trt_unique_ptr = std::unique_ptr<T,trt_object_deleter>;
+
+    // template <class T>
+    // using trt_shared_ptr = std::shared_ptr<T,trt_object_deleter>;
+
     class tensorrt_inference_engine : public inference_engine {
     public: 
         /*****************************************************/
@@ -33,11 +56,55 @@ namespace ie {
             return {};
         }
 
+        virtual std::vector<bbox> detection_parser (trt_unique_ptr<IExecutionContext> infer_request) {
+            return {};
+        }
+
+        virtual std::vector<int> classification_parser (trt_unique_ptr<IExecutionContext> infer_request) {
+            return {};
+        }
+
         using ptr = std::shared_ptr<tensorrt_inference_engine>;
     protected:
-        std::shared_ptr<ICudaEngine> engine;
+        // unique_ptr
+        // --> pass to function --> always move
+        // --> return from function --> not neccessary if copy elision is possible
+        trt_unique_ptr<ICudaEngine> engine;
 
-        
+        virtual void build_engine(std::string uff_file) {
+            // create builder
+            auto builder = createInferBuilder(glogger);
+            // create network
+            trt_unique_ptr<INetworkDefinition> network{builder->createNetworkV2(0U)};
+            // create parser
+            auto parser = nvuffparser::createUffParser();
+            // declare the network input and output
+            // so we must know the input size of the network
+            // why don't we interpret it from the uff file? 
+            // if then, we need specify it in the server config (json file)
+            // input name, input size (NCHW), output name 
+
+            // parse the network
+            parser->parse(uff_file.c_str(), *network, DataType::kFLOAT);
+            // create the cuda engine
+            trt_unique_ptr<IBuilderConfig> config{builder->createBuilderConfig()};
+            config->setMaxWorkspaceSize(1<<20); // 2GB
+            engine = trt_unique_ptr<ICudaEngine>{builder->buildEngineWithConfig(*network,*config)};
+        }
+
+        virtual trt_unique_ptr<IExecutionContext> do_infer(const char* data, int size) {
+            // create execution context with memory allocation for all 
+            // activations (laten features)
+            trt_unique_ptr<IExecutionContext> infer_request{engine->createExecutionContext()};
+
+            // prepare input and output buffer, just like in ovn
+            // but here we need to handle it ourself, i.e. allocate and dealocate the input and
+            // output blob memory --> RAII buffer
+
+            // should be able to get the output of network from this request
+            // may be we should return a buffer?
+            return infer_request;
+        }
 
     };
 
