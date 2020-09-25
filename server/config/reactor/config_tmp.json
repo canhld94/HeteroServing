@@ -14,11 +14,7 @@
         ]
       },
       {
-        "device": "igpu",
-        "models": []
-      },
-      {
-        "device": "nvgpu",
+        "device": "gpu",
         "name": "yolov3",
         "models": []
       }

@@ -1,16 +1,26 @@
 {
-    "ip": "0.0.0.0",
-    "port": "8081",
-    "inference engines": [
-      {
-        "name": "ssd",
-        "device": "fpga",
-        "model": "/home/canhld/workplace/InferenceServer/openvino_models/dota/ssd608_mobilenet_v2_dota_fp16.xml",
-        "labels": "/home/canhld/workplace/InferenceServer/openvino_models/dota/dota_ssd.txt",
-        "fpga configuration": {
-          "dev": "acla0",
-          "bitstream": "/opt/intel/openvino_2019.1.144/bitstreams/a10_devkit_bitstreams/2019R1_A10DK_FP16_MobileNet_Clamp.aocx"
+  "ip": "0.0.0.0",
+  "port": "8081",
+  "inference engines": [
+    {
+      "device": "cpu",
+      "models": []
+    },
+    {
+      "device": "fpga",
+      "models": [
+        {
+          "name": "ssd",
+          "graph": "/home/canhld/workplace/InferenceServer/openvino_models/dota/ssdlite_mobilenet_v2_dota_fp16.xml",
+          "label": "/home/canhld/workplace/InferenceServer/openvino_models/dota/dota_ssd.txt",
+          "replicas": "1"
         }
-      }
-    ]
-  }
+      ],
+      "bitstream": "/opt/intel/openvino_2019.1.144/bitstreams/a10_devkit_bitstreams/2019R1_A10DK_FP16_MobileNet_Clamp.aocx"
+    },
+    {
+      "device": "gpu",
+      "models": []
+    }
+  ]
+}
