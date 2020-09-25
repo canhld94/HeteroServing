@@ -283,13 +283,6 @@ namespace worker {
             // create property tree and write to json
             JSON res;                   // our response
             JSON bboxes;                // predicion
-            if (n > 0) {
-                res.put<std::string>("status","ok");
-            }
-            else {
-                res.put<std::string>("status","not ok");
-                res.put<std::string>("why","empty detection box");
-            }
             for (int i = 0; i < n; ++i) {
                 // parse prediction[i] to p[i]
                 bbox &pred = prediction[i];
