@@ -64,7 +64,7 @@ struct http_conn {
     http_conn() = delete;
     http_conn(http_conn &other) = delete;
     http_conn(tcp::socket &&_sock, beast_basic_request &&_req): 
-        sock(std::move(_sock)), req(_req) {};
+        sock(std::move(_sock)), req(std::move(_req)) {};
     using ptr = std::shared_ptr<http_conn>;
 };
 using http_mq = blocking_queue<http_conn::ptr>;
