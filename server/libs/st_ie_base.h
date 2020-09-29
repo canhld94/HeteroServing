@@ -13,6 +13,7 @@
 #include <memory>
 #include <iterator>
 #include <fstream>
+#include "st_ie_common.h"
 
 /*
 TensorRT and OpenVINO Anatomy
@@ -49,17 +50,6 @@ way to do it right now.
 
 namespace st {
 namespace ie {
-
-    /**
-     * @brief Bouding box object
-     * @details Basic bouding box object that can use in any recognition task
-     */
-    struct bbox {
-        int label_id;       //!< label id
-        std::string label;  //!< class name
-        float prop;         //!< confidence score
-        int c[4];           //!< coordinates of bounding box
-    };
 
     /**
      * @brief Generic Inference Engine Interface

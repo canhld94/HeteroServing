@@ -10,38 +10,22 @@
 #include <string>
 #include <memory>
 
-#include "NvInfer.h"
-#include "NvInferPlugin.h"
-#include "NvUffParser.h"
+#include <NvInfer.h>
+#include <NvInferPlugin.h>
+#include <NvUffParser.h>
 
 #include "st_ie_base.h"
+#include "st_ie_common.h"
+#include "st_ie_buffer.h"
+
 using namespace st::ie;
 using namespace nvinfer1;
+using namespace nvuffparser;
+
+class logger glogger;
 
 namespace st {
 namespace ie {
-    class logger : public ILogger {
-        void log(Severity serverity, const char *msg) {
-            if (serverity != Severity::kINFO) {
-                std::cout << msg << std::endl;
-            }
-        }
-    } glogger; // global logger
-
-    struct trt_object_deleter {
-    template <typename T>
-        void operator()(T* obj) const {
-            if (obj)
-            {
-                obj->destroy();
-            }
-        }
-    };
-    template <class T>
-    using trt_unique_ptr = std::unique_ptr<T,trt_object_deleter>;
-
-    // template <class T>
-    // using trt_shared_ptr = std::shared_ptr<T,trt_object_deleter>;
 
     class tensorrt_inference_engine : public inference_engine {
     public: 
@@ -69,43 +53,61 @@ namespace ie {
         // unique_ptr
         // --> pass to function --> always move
         // --> return from function --> not neccessary if copy elision is possible
-        trt_unique_ptr<ICudaEngine> engine;
 
-        virtual void build_engine(std::string uff_file) {
+        virtual void build_engine(std::string uff_file, DataType Tp) {
             // create builder
-            auto builder = createInferBuilder(glogger);
+            auto builder = trt_unique_ptr<IBuilder>{createInferBuilder(glogger)};
+            assert(builder);
             // create network
             trt_unique_ptr<INetworkDefinition> network{builder->createNetworkV2(0U)};
             // create parser
-            auto parser = nvuffparser::createUffParser();
+            auto parser = trt_unique_ptr<IUffParser>{nvuffparser::createUffParser()};
+            assert(parser);
             // declare the network input and output
             // so we must know the input size of the network
             // why don't we interpret it from the uff file? 
             // if then, we need specify it in the server config (json file)
             // input name, input size (NCHW), output name 
-
+            for (auto &node : input_node) {
+                parser->registerInput(node.c_str(),DimsCHW(C,H,W),UffInputOrder::kNCHW);
+            }
+            for (auto &node : output_nodes) {
+                parser->registerOutput(node.c_str());
+            }
             // parse the network
-            parser->parse(uff_file.c_str(), *network, DataType::kFLOAT);
+            parser->parse(uff_file.c_str(), *network, Tp);
             // create the cuda engine
             trt_unique_ptr<IBuilderConfig> config{builder->createBuilderConfig()};
+            assert(config);
+            builder->setMaxBatchSize(N);
             config->setMaxWorkspaceSize(1<<20); // 2GB
-            engine = trt_unique_ptr<ICudaEngine>{builder->buildEngineWithConfig(*network,*config)};
+            // enable fp16
+            if (fp16) {
+                config->setFlag(BuilderFlag::kFP16);
+            }
+            engine = trt_shared_ptr<ICudaEngine>{builder->buildEngineWithConfig(*network,*config),trt_object_deleter()};
+            assert(engine);
         }
 
-        virtual trt_unique_ptr<IExecutionContext> do_infer(const char* data, int size) {
+        virtual std::unique_ptr<buffer_manager> do_infer(const char* data, int size) {
             // create execution context with memory allocation for all 
             // activations (laten features)
             trt_unique_ptr<IExecutionContext> infer_request{engine->createExecutionContext()};
-
+            std::unique_ptr<buffer_manager> iobuf{new buffer_manager(engine,N)};
             // prepare input and output buffer, just like in ovn
             // but here we need to handle it ourself, i.e. allocate and dealocate the input and
             // output blob memory --> RAII buffer
-
+            cv::Mat frame = cv::imdecode(cv::Mat(1,size,CV_8UC3, (unsigned char*) data),cv::IMREAD_UNCHANGED);
             // should be able to get the output of network from this request
-            // may be we should return a buffer?
-            return infer_request;
+            // may be we should return a buffer? --> yes
+            return iobuf;
         }
 
+        trt_shared_ptr<ICudaEngine> engine;
+        int N,C,H,W;                                // input shape of the models
+        bool fp16;
+        std::vector<std::string> input_node;
+        std::vector<std::string> output_nodes;
     };
 
     class tensorrt_ssd : public tensorrt_inference_engine {

@@ -171,9 +171,9 @@ class gpu_buffer_factory : public buffer_factory {
 struct blob {
   generic_buffer::ptr host_mem;
   generic_buffer::ptr gpu_mem;
-  blob(): host_mem(nullptr), gpu_mem(nullptr) {};
-  blob(generic_buffer::ptr &&_host_mem, generic_buffer&& _gpu_mem):
-      host_mem(std::move(_host_mem)), gpu_mem(std::move(_gpu_mem)) {};
+  blob() : host_mem(nullptr), gpu_mem(nullptr){};
+  blob(generic_buffer::ptr &&_host_mem, generic_buffer &&_gpu_mem)
+      : host_mem(std::move(_host_mem)), gpu_mem(std::move(_gpu_mem)){};
   using ptr = std::unique_ptr<blob>;
 }
 
@@ -183,15 +183,17 @@ struct blob {
  */
 class buffer_manager {
 public:
-  buffer_manager(trt_shared_ptr<ICudaEngine> _engine, int _batch_size) :
-                engine(_engine), batch_size(_batch_size) {
+  buffer_manager(trt_shared_ptr<ICudaEngine> _engine, int _batch_size)
+      : engine(_engine), batch_size(_batch_size) {
     unique_ptr<buffer_factory> host_factory{new host_buffer_factory};
     unique_ptr<buffer_factory> gpu_factory{new gpu_buffer_factory};
     // fill the blob vector
     for (int i = 0; i < engine->getNbBindings(); ++i) {
-      
+      // get type of bindings
+      auto dtype = engine->getBindingDataType(i);
+      // calcuate the size of bindings
+      size_t vol = 1;
     }
-
   }
   // iterate all input blobs, copy data from host to gpu
   void memcpy_input_htod() {}
@@ -199,6 +201,36 @@ public:
   void memcpy_output_dtoh() {}
 
 private:
+  // get the buffer associcate to tensorname
+  void *get_buffer(const bool is_host, std::string tensorname) const {
+    int index = engine->getBindingIndex(tensorname.c_str());
+    if (index == -1) {
+      return nullptr;
+    }
+    return is_host ? blobs[i]->host_mem->get_data()
+                   : blobs[i]->gpu_mem->get_data();
+  }
+  // copy data from host to device and device to host
+  void memcpy_buffer(const bool is_input, const bool htod, const bool async,
+                     const cudaStream_t &stream = 0) {
+    for (int i = 0; i < engine->getNbBindings(); ++i) {
+      void *src_ptr =
+          htod ? blobs[i]->host_mem->get_data() : blobs[i]->gpu_mem->get_data();
+      void *dst_ptr =
+          htod ? blobs[i]->gpu_mem->get_data() : blobs[i]->host_mem->get_data();
+      const size_t nbytes = blobs[i]->host_mem->get_nbytes();
+      const cudaMemcpyKind cuda_memcpy_kind =
+          htod ? cudaMemcpyHostToDevice : cudaMemcpyDeviceToHost;
+      if ((is_input && engine->bindingIsInput(i)) ||
+          (!is_input && !engine->bindingIsInput(i))) {
+        if (async) {
+          cudaMemcpyAsync(src_ptr, dst_ptr, nbytes, cuda_memcpy_kind, stream);
+        } else {
+          cudaMemcpy(src_ptr, dst_ptr, nbytes, cuda_memcpy_kind);
+        }
+      }
+    }
+  }
   // hold all input and output blobs
   trt_shared_ptr<ICudaEngine> engine;
   int batch_size;
