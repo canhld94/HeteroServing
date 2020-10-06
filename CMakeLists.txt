@@ -70,6 +70,8 @@ find_package(CUDA REQUIRED)
 set(TensorRT_ROOT "/home/canhld/softwares/TensorRT-7.1.3.4/")
 find_package(TensorRT REQUIRED)
 
+message(STATUS ${CUDA_LIBRARIES})
+
 # Other libraries: boost, gflags, gtest, spdlog is managed by conan
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup()

@@ -35,11 +35,11 @@ foreach(search ${_TensorRT_SEARCHES})
   find_path(TensorRT_INCLUDE_DIR NAMES NvInfer.h ${${search}} PATH_SUFFIXES include)
 endforeach()
 
-if(NOT TensorRT_LIBRARY)
-  foreach(search ${_TensorRT_SEARCHES})
-    find_library(TensorRT_LIBRARY NAMES nvinfer ${${search}} PATH_SUFFIXES lib)
-  endforeach()
-endif()
+foreach(search ${_TensorRT_SEARCHES})
+  find_library(TensorRT_LIBRARY NAMES nvinfer ${${search}} PATH_SUFFIXES lib)
+  find_library(NVPARSERS_LIBRARY NAMES nvparsers ${${search}} PATH_SUFFIXES lib)
+  find_library(NVONNX_PARSER_LIBRARY NAMES nvonnxparser ${${search}} PATH_SUFFIXES lib)
+endforeach()
 
 mark_as_advanced(TensorRT_INCLUDE_DIR)
 
@@ -55,13 +55,13 @@ if(TensorRT_INCLUDE_DIR AND EXISTS "${TensorRT_INCLUDE_DIR}/NvInfer.h")
 endif()
 
 include(FindPackageHandleStandardArgs)
-FIND_PACKAGE_HANDLE_STANDARD_ARGS(TensorRT REQUIRED_VARS TensorRT_LIBRARY TensorRT_INCLUDE_DIR VERSION_VAR TensorRT_VERSION_STRING)
+FIND_PACKAGE_HANDLE_STANDARD_ARGS(TensorRT REQUIRED_VARS TensorRT_LIBRARY TensorRT_INCLUDE_DIR NVPARSERS_LIBRARY NVONNX_PARSER_LIBRARY VERSION_VAR TensorRT_VERSION_STRING)
 
 if(TensorRT_FOUND)
   set(TensorRT_INCLUDE_DIRS ${TensorRT_INCLUDE_DIR})
 
   if(NOT TensorRT_LIBRARIES)
-    set(TensorRT_LIBRARIES ${TensorRT_LIBRARY})
+    set(TensorRT_LIBRARIES "${TensorRT_LIBRARY}${NVPARSERS_LIBRARY}${NVONNX_PARSER_LIBRARY}")
   endif()
 
   if(NOT TARGET TensorRT::TensorRT)

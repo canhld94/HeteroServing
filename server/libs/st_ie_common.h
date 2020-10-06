@@ -2,14 +2,13 @@
 
 #pragma once
 
+#include <NvInfer.h>
 #include <cuda_runtime_api.h>
+#include <inference_engine.hpp>
 #include <memory>
+#include <opencv2/opencv.hpp>
 #include <string>
 #include <vector>
-#include <opencv2/opencv.hpp>
-#include <inference_engine.hpp>
-#include <NvInfer.h>
-
 
 using namespace InferenceEngine;
 using namespace nvinfer1;
@@ -21,10 +20,10 @@ namespace ie {
  * @details Basic bouding box object that can use in any recognition task
  */
 struct bbox {
-  int label_id;      //!< label id
-  std::string label; //!< class name
-  float prop;        //!< confidence score
-  int c[4];          //!< coordinates of bounding box
+  int label_id;       //!< label id
+  std::string label;  //!< class name
+  float prop;         //!< confidence score
+  int c[4];           //!< coordinates of bounding box
 };
 /**
 * @brief Sets image data stored in cv::Mat object to a given Blob object.
@@ -33,13 +32,13 @@ struct bbox {
 * @param batchIndex - batch index of an image inside of the blob.
 */
 template <typename T>
-void matU8ToBlob(const cv::Mat &orig_image, Blob::Ptr &blob,
+void matU8ToBlob(const cv::Mat& orig_image, Blob::Ptr& blob,
                  int batchIndex = 0) {
   SizeVector blobSize = blob->getTensorDesc().getDims();
   const size_t width = blobSize[3];
   const size_t height = blobSize[2];
   const size_t channels = blobSize[1];
-  T *blob_data = blob->buffer().as<T *>();
+  T* blob_data = blob->buffer().as<T*>();
 
   cv::Mat resized_image(orig_image);
   if (static_cast<int>(width) != orig_image.size().width ||
@@ -65,8 +64,8 @@ void matU8ToBlob(const cv::Mat &orig_image, Blob::Ptr &blob,
  * @param inferRequest
  * @param inputName
  */
-void frameToBlob(const cv::Mat &frame, InferRequest::Ptr &inferRequest,
-                 const std::string &inputName) {
+void frameToBlob(const cv::Mat& frame, InferRequest::Ptr& inferRequest,
+                 const std::string& inputName) {
   Blob::Ptr frameBlob = inferRequest->GetBlob(inputName);
   matU8ToBlob<uint8_t>(frame, frameBlob);
 }
@@ -85,7 +84,7 @@ struct network_output {
  *
  */
 class logger : public ILogger {
-  void log(Severity serverity, const char *msg) override {
+  void log(Severity serverity, const char* msg) override {
     if (serverity != Severity::kINFO) {
       std::cout << msg << std::endl;
     }
@@ -96,7 +95,8 @@ class logger : public ILogger {
  *
  */
 struct trt_object_deleter {
-  template <typename T> void operator() (T *obj) const {
+  template <typename T>
+  void operator()(T* obj) const {
     if (obj) {
       obj->destroy();
     }
@@ -105,24 +105,24 @@ struct trt_object_deleter {
 
 int trt_type_size(DataType Tp) {
   switch (Tp) {
-  case DataType::kFLOAT:
-    return 4;
-    break;
-  case DataType::kHALF:
-    return 2;
-    break;
-  case DataType::kINT32:
-    return 4;
-    break;
-  case DataType::kINT8:
-    return 1;
-    break;
-  case DataType::kBOOL:
-    return 1;
-    break;
-  default:
-    return 0;
-    break;
+    case DataType::kFLOAT:
+      return 4;
+      break;
+    case DataType::kHALF:
+      return 2;
+      break;
+    case DataType::kINT32:
+      return 4;
+      break;
+    case DataType::kINT8:
+      return 1;
+      break;
+    case DataType::kBOOL:
+      return 1;
+      break;
+    default:
+      return 0;
+      break;
   }
   return 0;
 }
@@ -130,6 +130,13 @@ int trt_type_size(DataType Tp) {
 template <class T>
 using trt_unique_ptr = std::unique_ptr<T, trt_object_deleter>;
 
-template <class T> using trt_shared_ptr = std::shared_ptr<T>;
+template <class T>
+using trt_shared_ptr = std::shared_ptr<T>;
+
+template<class T>
+inline trt_shared_ptr<T> trt_make_shared(T* ptr) {
+  return trt_shared_ptr<T>(ptr, trt_object_deleter());
+}
+
 }
 }

@@ -12,7 +12,9 @@ target_link_libraries(parallel_server
                         IE::ie_cpu_extension
                         ${CONAN_LIBS}
                         ${OpenCV_LIBRARIES}
-                        ${InferenceEngine_LIBRARIES})
+                        ${InferenceEngine_LIBRARIES}
+                        ${CUDA_LIBRARIES}
+                        ${TensorRT_LIBRARIES})
 
 install(TARGETS parallel_server
         RUNTIME DESTINATION bin
