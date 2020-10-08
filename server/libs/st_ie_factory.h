@@ -30,6 +30,8 @@ class ie_factory {
                                                 const std::string& device_name,
                                                 const std::string& model,
                                                 const std::string& label) {
+    std::cout << device_name << std::endl;
+    std::cout << model_name << std::endl;
     auto mcode = str2mcode(model_name);
     auto dcode = str2dcode(device_name);
     if (dcode != device_code::GPU) {

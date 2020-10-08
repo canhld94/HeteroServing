@@ -4,14 +4,7 @@
     "inference engines": [
       {
         "device": "cpu",
-        "models": [
-          {
-            "name": "ssd",
-            "graph": "/home/canhld/workplace/InferenceServer/openvino_models/dota/ssdlite_mobilenet_v2_dota_fp32.xml",
-            "label": "/home/canhld/workplace/InferenceServer/openvino_models/dota/dota_ssd.txt",
-            "replicas": "1"
-          }
-        ]
+        "models": []
       },
       {
         "device": "fpga",
@@ -23,12 +16,10 @@
         "models": [
             {
                 "name": "ssd",
-                "graph": "/home/canhld/workplace/InferenceServer/openvino_models/dota/ssdlite_mobilenet_v2_dota_fp32.xml",
+                "graph": "/home/canhld/workplace/InferenceServer/onnx_model/ssdlite_mobilenet_v22_i32.onnx",
                 "input nodes" : "",
                 "input shape" : "",
-                "output nodes" : [
-
-                ],
+                "output nodes" : [],
                 "label": "/home/canhld/workplace/InferenceServer/openvino_models/dota/dota_ssd.txt",
                 "replicas": "1"
             }

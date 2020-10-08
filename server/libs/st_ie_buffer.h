@@ -53,6 +53,23 @@ class generic_buffer {
   size_t size;
   size_t nbytes;
 };
+
+struct host_allocator {
+  bool operator()(void** data, size_t size) {
+    *data = malloc(size);
+    return data != nullptr;
+  }
+};
+struct host_deleter {
+  void operator()(void* data) { free(data); }
+};
+struct gpu_allocator {
+  bool operator()(void** data, size_t size) { return cudaMalloc(data, size); }
+};
+struct gpu_deleter {
+  void operator()(void* data) { cudaFree(data); }
+};
+
 /**
 * @brief RAII generic buffer implementation
 * @tparam Allocator
@@ -104,25 +121,11 @@ class flat_buffer : public generic_buffer {
     return;
   }
 
- private:
-  static Allocator alloc_fn;
-  static Deleter free_fn;
+ protected:
+  Allocator alloc_fn;
+  Deleter free_fn;
 };
-struct host_allocator {
-  bool operator()(void** data, size_t size) {
-    *data = malloc(size);
-    return data != nullptr;
-  }
-};
-struct host_deleter {
-  void operator()(void* data) { free(data); }
-};
-struct gpu_allocator {
-  bool operator()(void** data, size_t size) { return cudaMalloc(data, size); }
-};
-struct gpu_deleter {
-  void operator()(void* data) { cudaFree(data); }
-};
+
 template <typename T>
 using host_buffer = flat_buffer<host_allocator, host_deleter, T>;
 template <typename T>

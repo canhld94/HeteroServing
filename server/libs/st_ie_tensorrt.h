@@ -65,7 +65,8 @@ class tensorrt_inference_engine : public inference_engine {
     auto builder = trt_unique_ptr<IBuilder>{createInferBuilder(glogger)};
     assert(builder);
     // create network
-    trt_unique_ptr<INetworkDefinition> network{builder->createNetworkV2(0U)};
+    const auto explicitBatch = 1U << static_cast<uint32_t>(NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);     
+    trt_unique_ptr<INetworkDefinition> network{builder->createNetworkV2(explicitBatch)};
     // create parser
     auto parser = trt_unique_ptr<IParser>{nvonnxparser::createParser(*network, glogger)};
     assert(parser);
@@ -89,7 +90,7 @@ class tensorrt_inference_engine : public inference_engine {
     // create the cuda engine
     trt_unique_ptr<IBuilderConfig> config{builder->createBuilderConfig()};
     assert(config);
-    builder->setMaxBatchSize(N);
+    // builder->setMaxBatchSize(N);
     config->setMaxWorkspaceSize(1 << 25);  // 512MB
     // enable fp16
     if (fp16) {
@@ -132,7 +133,7 @@ class tensorrt_ssd : public tensorrt_inference_engine {
   public:
   tensorrt_ssd(const std::string &model, const std::string &label) {
     // parser with models here
-
+    build_engine(model,DataType::kFLOAT);
     set_labels(label);
   }
   std::vector<bbox> detection_parser (std::unique_ptr<buffer_manager>&& iobuf) final {
