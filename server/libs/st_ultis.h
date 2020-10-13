@@ -19,13 +19,19 @@
 #include <memory>
 #include <string>
 
+#include <boost/config.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
+#include <boost/property_tree/json_parser.hpp>
 
-namespace beast = boost::beast;    // from <boost/beast.hpp>
-namespace http = beast::http;      // from <boost/beast/http.hpp>
+namespace beast = boost::beast;        // from <boost/beast.hpp>
+namespace http = beast::http;          // from <boost/beast/http.hpp>
 using tcp = boost::asio::ip::tcp;  // from <boost/asio/ip/tcp.hpp>
+namespace net = boost::asio;           // from <boost/asio.hpp>
+namespace bpt = boost::property_tree;  // from <boots/property_tree>
+namespace fs = boost::filesystem;      // from <boots/filesystem>
+typedef bpt::ptree JSON;               // just hiding the ugly name
 using beast_basic_request = http::request<http::string_body>;
 using beast_basic_response = http::response<http::string_body>;
 using beast_empty_response = http::response<http::empty_body>;

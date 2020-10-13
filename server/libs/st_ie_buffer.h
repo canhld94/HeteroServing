@@ -226,8 +226,7 @@ class buffer_manager {
       throw std::logic_error("TRT network has no tensor name " + tensorname);
     }
     Dims dim = context->getBindingDimensions(index);
-    blobs[index].host_mem->fill_from_mat(img, dim,
-                                      0);  // currently support batch 1
+    blobs[index].host_mem->fill_from_mat(img, dim, 0);  // currently support batch 1
   }
   // iterate all input blobs, copy data from host to gpu
   void memcpy_input_htod() { memcpy_buffer(true, true, false); }

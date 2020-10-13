@@ -111,5 +111,6 @@ class inference_engine {
               std::istream_iterator<std::string>(), std::back_inserter(labels));
   }
 };
+
 }  // namespace st
 }  // namespace ie

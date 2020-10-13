@@ -2,7 +2,16 @@
 
 What have been done and what to learn up to
 
-## ---- 2020 / 09 / 17 ----
+## ---- 2020 / 10 / 12 ----
+
+- __What've been done__
+  - Adding tensorRT implementation to run inference on GPU
+- __Problem__
+  - onnx format doesn't work with tensorflow
+  - uff require different parameter
+  
+
+## ---- 2020 / 09 / 20 ----
 
 - __What've been done__
   - Reactor server compiled and worked

@@ -8,24 +8,13 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/spdlog.h>
 #include <stdlib.h>
-#include <boost/asio/ip/tcp.hpp>
-#include <boost/beast/core.hpp>
-#include <boost/beast/http.hpp>
-#include <boost/beast/version.hpp>
 #include <boost/config.hpp>
 #include <boost/filesystem.hpp>
-#include <boost/property_tree/json_parser.hpp>
 #include "st_exception.h"
 #include "st_ie_base.h"
 #include "st_ie_factory.h"
 #include "st_sync_worker.h"
 #include "st_ultis.h"
-namespace beast = boost::beast;        // from <boost/beast.hpp>
-namespace http = beast::http;          // from <boost/beast/http.hpp>
-namespace net = boost::asio;           // from <boost/asio.hpp>
-namespace bpt = boost::property_tree;  // from <boots/property_tree>
-namespace fs = boost::filesystem;      // from <boots/filesystem>
-typedef bpt::ptree JSON;               // just hiding the ugly name
 using namespace st::sync;
 using namespace st::worker;
 using namespace st::ie;
@@ -138,7 +127,7 @@ int main(int argc, char const* argv[]) {
         // Therefore, current version of inference server can run at most
         // one FPGA inference worker.
         if (replicas > 1) {
-          throw fpga_overused();
+          throw std::logic_error("FPGA inference engine: expected 1, got " + std::to_string(replicas));
         }
         // bitstream
         const std::string& bitstream = conf.get<std::string>("bitstream");

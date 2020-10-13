@@ -5,11 +5,7 @@
  ***************************************************************************************/
 
 #pragma once
-#include <boost/asio/dispatch.hpp>
-#include <boost/asio/strand.hpp>
-#include <boost/config.hpp>
 #include <boost/lexical_cast.hpp>
-#include <boost/property_tree/json_parser.hpp>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -22,12 +18,12 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/spdlog.h>
 
-namespace beast = boost::beast;        // from <boost/beast.hpp>
-namespace http = beast::http;          // from <boost/beast/http.hpp>
-namespace net = boost::asio;           // from <boost/asio.hpp>
-namespace bpt = boost::property_tree;  // from <boots/property_tree>
-using tcp = boost::asio::ip::tcp;      // from <boost/asio/ip/tcp.hpp>
-typedef bpt::ptree JSON;               // just hiding the ugly name
+// namespace beast = boost::beast;        // from <boost/beast.hpp>
+// namespace http = beast::http;          // from <boost/beast/http.hpp>
+// namespace net = boost::asio;           // from <boost/asio.hpp>
+// namespace bpt = boost::property_tree;  // from <boots/property_tree>
+// using tcp = boost::asio::ip::tcp;      // from <boost/asio/ip/tcp.hpp>
+// typedef bpt::ptree JSON;               // just hiding the ugly name
 
 #include "st_ie_base.h"
 #include "st_sync.h"

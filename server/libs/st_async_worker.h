@@ -10,12 +10,6 @@
 #include <algorithm>
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/strand.hpp>
-#include <boost/beast/core.hpp>
-#include <boost/beast/http.hpp>
-#include <boost/beast/version.hpp>
-#include <boost/config.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/property_tree/json_parser.hpp>
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
@@ -30,14 +24,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-namespace beast = boost::beast;        // from <boost/beast.hpp>
-namespace http = beast::http;          // from <boost/beast/http.hpp>
-namespace net = boost::asio;           // from <boost/asio.hpp>
-namespace bpt = boost::property_tree;  // from <boots/property_tree>
-
-using tcp = boost::asio::ip::tcp;  // from <boost/asio/ip/tcp.hpp>
-typedef bpt::ptree JSON;           // just hiding the ugly name
 
 #include "st_ie_base.h"
 #include "st_sync.h"
