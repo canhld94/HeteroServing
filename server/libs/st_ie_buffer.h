@@ -96,10 +96,10 @@ class flat_buffer : public generic_buffer {
     assert(data != nullptr);
     assert(dim.nbDims == 4);
     // default NCHW
-    size_t batch_size = dim.d[0], channels = dim.d[1], height = dim.d[2],
+    size_t channels = dim.d[1], height = dim.d[2],
         width = dim.d[3];
-    assert(batch_size == 1);
-    assert(size == batch_size * channels * height * width);
+    // assert(batch_size == 1);
+    // assert(size == batch_size * channels * height * width);
     // resize the mat data to chw
     cv::Mat resized_image(orig_image);
     if (static_cast<int>(height) != orig_image.size().height ||

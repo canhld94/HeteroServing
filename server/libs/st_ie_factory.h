@@ -10,6 +10,7 @@
 #include "st_ie_base.h"
 #include "st_ie_openvino.h"
 #include "st_ie_tensorrt.h"
+#include "st_ultis.h"
 
 namespace st {
 namespace ie {
@@ -19,6 +20,7 @@ enum class model_code {
   YOLOV3 = 1,
   RCNN = 2,
 };
+
 // convert string to model code
 model_code str2mcode(const std::string& model_name) {
   std::string model;
@@ -56,6 +58,7 @@ inference_engine::ptr create_openvino_engine(const std::string& plugin,
       return nullptr;
   }
 }
+
 // create tensorrt inference engine object
 inference_engine::ptr create_tensorrt_engine(const std::string& model_name,
                                              const std::string& model,
@@ -82,45 +85,50 @@ inference_engine::ptr create_tensorrt_engine(const std::string& model_name,
  */
 class inference_engine_creator {
  public:
-  virtual inference_engine::ptr create(const std::string& model_name,
-                                       const std::string& model,
-                                       const std::string& label) = 0;
+  virtual inference_engine::ptr create(JSON& conf) = 0;
 };
 
 class cpu_inference_engine_creator : public inference_engine_creator {
  public:
-  inference_engine::ptr create(const std::string& model_name,
-                               const std::string& model,
-                               const std::string& label) final {
+  inference_engine::ptr create(JSON& conf) final {
     std::string plugin = "CPU";
-    return create_openvino_engine(plugin, model_name, model, label);
+    // get the model spec, we know that its size must be positive
+    auto& model = conf.get_child("model");
+    const std::string& name = model.get<std::string>("name");
+    const std::string& graph = model.get<std::string>("graph");
+    const std::string& label = model.get<std::string>("label");
+    return create_openvino_engine(plugin, name, graph, label);
   }
 };
 
 class intel_fpga_inference_engine_creator : public inference_engine_creator {
  public:
-  inference_engine::ptr create(const std::string& model_name,
-                               const std::string& model,
-                               const std::string& label) final {
+  inference_engine::ptr create(JSON& conf) final {
     std::string plugin = "HETERO:FPGA,CPU";
-    return create_openvino_engine(plugin, model_name, model, label);
+    // get the model spec, we know that its size must be positive
+    auto& model = conf.get_child("model");
+    const std::string& name = model.get<std::string>("name");
+    const std::string& graph = model.get<std::string>("graph");
+    const std::string& label = model.get<std::string>("label");
+    return create_openvino_engine(plugin, name, graph, label);
   }
 };
 
 class nvidia_gpu_inference_engine_creator : public inference_engine_creator {
  public:
-  inference_engine::ptr create(const std::string& model_name,
-                               const std::string& model,
-                               const std::string& label) final {
-    return create_tensorrt_engine(model_name, model, label);
+  inference_engine::ptr create(JSON& conf) final {
+    // get the model spec, we know that its size must be positive
+    auto& model = conf.get_child("model");
+    const std::string& name = model.get<std::string>("name");
+    const std::string& graph = model.get<std::string>("graph");
+    const std::string& label = model.get<std::string>("label");
+    return create_tensorrt_engine(name, graph, label);
   }
 };
 
 class xilinx_gpu_inference_engine_creator : public inference_engine_creator {
  public:
-  inference_engine::ptr create(const std::string& model_name,
-                               const std::string& model,
-                               const std::string& label) final {
+  inference_engine::ptr create(JSON& conf) final {
     throw std::logic_error("Xilinx FPGA inference engine has not yet implemented");
   }
 };
@@ -132,6 +140,7 @@ class xilinx_gpu_inference_engine_creator : public inference_engine_creator {
 class ie_factory {
  public:
   ie_factory() {
+    // register your plugin here and do not modify anything outside of this
     Register("intel cpu", new cpu_inference_engine_creator());
     Register("intel fpga", new intel_fpga_inference_engine_creator());
     Register("nvidia gpu", new nvidia_gpu_inference_engine_creator());
@@ -145,26 +154,24 @@ class ie_factory {
    * @param label
    * @return inference_engine::ptr
    */
-  inference_engine::ptr create_inference_engine(const std::string& model_name,
-                                                const std::string& device_name,
-                                                const std::string& model,
-                                                const std::string& label) {
-    auto it = registry.find(device_name);
+  inference_engine::ptr create_inference_engine(JSON& conf) {
+    const std::string& device = conf.get<std::string>("device");
+    auto it = registry.find(device);
     if (it == registry.end()) {
-      throw std::logic_error("Creator of [" + device_name + "] not found in registry");
+      throw std::logic_error("Creator of [" + device + "] not found in registry");
     }
     auto creator = it->second;
-    return creator->create(model_name, model, label);
+    return creator->create(conf);
   }
 
  private:
   std::unordered_map<std::string, inference_engine_creator*> registry;
-  void Register(std::string plugin, inference_engine_creator* creator) {
-    auto it = registry.find(plugin);
+  void Register(std::string device, inference_engine_creator* creator) {
+    auto it = registry.find(device);
     if (it != registry.end()) {
-      throw std::logic_error("Creator of [" + plugin + "] has already been in registry");
+      throw std::logic_error("Creator of [" + device + "] has already been in registry");
     }
-    registry.insert({plugin, creator});
+    registry.insert({device, creator});
   }
 };
 }

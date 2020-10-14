@@ -112,15 +112,9 @@ int main(int argc, char const* argv[]) {
       auto conf = it->second;
       const std::string& device = conf.get<std::string>("device");
       // get the models list, pass if there is no models
-      auto& model_list = conf.get_child("models");
-      if (model_list.size() == 0) continue;
-      // currently, one device can run only one models, so only get the begin
-      auto model = model_list.begin()->second;
-      const std::string& name = model.get<std::string>("name");
-      // path to the model graph and weight
-      const std::string& graph = model.get<std::string>("graph");
-      const std::string& labels = model.get<std::string>("label");
-      const int replicas = model.get<int>("replicas");
+      auto& model = conf.get_child("model");
+      if (model.size() == 0) continue;
+      const int replicas = conf.get<int>("replicas");
       bool is_fpga = device.find("fpga") != std::string::npos;
       if (is_fpga) {
         // FPGA inference worker cannot run outside of main threads
@@ -137,11 +131,10 @@ int main(int argc, char const* argv[]) {
       // create inference engines
       for (int i = 0; i < replicas; ++i) {
         if (is_fpga) {
-          IEs.insert(IEs.begin(), factory.create_inference_engine(
-                                      name, device, graph, labels));
+          IEs.insert(IEs.begin(), factory.create_inference_engine(conf));
         } else {
           IEs.push_back(
-              factory.create_inference_engine(name, device, graph, labels));
+              factory.create_inference_engine(conf));
         }
       }
     }
