@@ -1,42 +1,67 @@
 import http.client
 import sys
 import json
-from PIL import Image, ImageFont, ImageDraw, ImageEnhance
+import cv2
+from multiprocessing import Pool
+from functools import partial
+import mimetypes
 
-# header must specify content-type is image/xxx
-# can be any type of images, but it should perfectly be jpeg file with size < 1MB
-# I'm setting max reading file from socket is 1MB, there are a bug make reading > 1M 
-# file take long time
 
-headers = {'Content-Type': 'image/jpeg'}
 
-# No need to decode, just read the raw byte and send
-body = open(sys.argv[1],'rb')
-ip = sys.argv[2]
-port = sys.argv[3]
-conn = http.client.HTTPConnection(ip+":"+port)
+def send_inference_wrap(img, http_client):
+    http_client.send_inference(img)
 
-# POST to /inference with body is the image
-conn.request('POST','/inference/cpu', body, headers)
-res = conn.getresponse()
-jsondata = res.read()
+class http_client():
+  def __init__(self, ip, port, num_process = 16):
+    self.ip = ip
+    self.port = port
+    self.pool = Pool(num_process)
+  
+  def send_inference(self, img):
+    # header must specify content-type is image/xxx
+    # can be any type of images, but it should perfectly be jpeg file with size < 1MB
+    # I'm setting max reading file from socket is 1MB, there are a bug make reading > 1M 
+    # file take long time
+    headers = {'Content-Type': 'image/jpg'}
+    # encode img 
+    _, body = cv2.imencode('.jpg',img)
+    conn = http.client.HTTPConnection(self.ip+":"+self.port)
+    # POST to /inference with body is the image
+    conn.request('POST','/inference', body.tobytes(), headers)
+    res = conn.getresponse()
+    jsondata = res.read()
+    # print(jsondata)
+    # data = json.loads(jsondata.decode('utf-8'))
+    # print(data)
+    # TODO: read and parse (and merge) the result
 
-# Parse response
-data = json.loads(jsondata.decode('utf-8'))
-im = Image.open(body)
-draw = ImageDraw.Draw(im)
-for p in data["predictions"]:
-    label_id = p["label_id"]
-    label = p["label"]
-    score = float(p["confidences"])
-    bbox = p["detection_box"]
-    tl = (int(bbox[0]),int(bbox[1]))
-    br = (int(bbox[2]),int(bbox[3]))
-    draw.rectangle((tl,br),outline = "red", width = 3)
-    draw.text((int(bbox[0]),int(bbox[1])-10), label + " " + str(round(score,2)))
+  def send_inference_mp(self,patch_list):
+    worker = partial(send_inference_wrap, http_client=self)
+    self.pool.map(worker,patch_list)
 
-im.save("testing.jpg","jpeg")
+  def __getstate__(self):
+      self_dict = self.__dict__.copy()
+      del self_dict['pool']
+      return self_dict
 
+  def __setstate__(self, state):
+      self.__dict__.update(state)
+
+# # Parse response
+# data = json.loads(jsondata.decode('utf-8'))
+# im = Image.open(body)
+# draw = ImageDraw.Draw(im)
+# for p in data["predictions"]:
+#     label_id = p["label_id"]
+#     label = p["label"]
+#     score = float(p["confidences"])
+#     bbox = p["detection_box"]
+#     tl = (int(bbox[0]),int(bbox[1]))
+#     br = (int(bbox[2]),int(bbox[3]))
+#     draw.rectangle((tl,br),outline = "red", width = 3)
+#     draw.text((int(bbox[0]),int(bbox[1])-10), label + " " + str(round(score,2)))
+
+# im.save("testing.jpg","jpeg")
 
 """
 Response format:
