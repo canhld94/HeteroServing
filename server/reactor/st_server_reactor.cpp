@@ -126,26 +126,20 @@ int main(int argc, char const* argv[]) {
       auto conf = it->second;
       const std::string& device = conf.get<std::string>("device");
       // get the models list, pass if there is no models
-      auto& model_list = conf.get_child("models");
-      if (model_list.size() == 0) continue;
-      // currently, one device can run only one models, so only get the begin
-      auto model = model_list.begin()->second;
-      std::vector<inference_engine::ptr> tmp;
-      const std::string& name = model.get<std::string>("name");
-      // path to the model graph and weight
-      const std::string& graph = model.get<std::string>("graph");
-      const std::string& labels = model.get<std::string>("label");
-      const int replicas = model.get<int>("replicas");
+      // get the models list, pass if there is no models
+      auto& model = conf.get_child("model");
+      if (model.size() == 0) continue;
+      const int replicas = conf.get<int>("replicas");
       bool is_fpga = device.find("fpga") != std::string::npos;
       bool is_cpu = device.find("cpu") != std::string::npos;
       bool is_gpu =
-          device.find("nvgpu") != std::string::npos;  // default nv gpu
+          device.find("gpu") != std::string::npos;  // default nv gpu
       if (is_fpga) {
         // FPGA inference worker cannot run outside of main threads
         // Therefore, current version of inference server can run at most
         // one FPGA inference worker.
         if (replicas > 1) {
-          throw fpga_overused();
+          throw std::logic_error("FPGA inference engine: expected 1, got " + std::to_string(replicas));
         }
         // bitstream
         const std::string& bitstream = conf.get<std::string>("bitstream");
@@ -153,9 +147,10 @@ int main(int argc, char const* argv[]) {
         // setenv("CL_CONTEXT_COMPILER_MODE_INTELFPGA","3",0);
       }
       // create inference engines
+      std::vector<inference_engine::ptr> tmp;
       for (int i = 0; i < replicas; ++i) {
         tmp.push_back(
-            factory.create_inference_engine(name, device, graph, labels));
+            factory.create_inference_engine(conf));
       }
       if (is_fpga) {
         fpga_ies = std::move(tmp);
