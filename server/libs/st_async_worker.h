@@ -26,7 +26,7 @@
 #include <vector>
 
 #include "st_ie_base.h"
-#include "st_sync.h"
+#include "st_message_queue.h"
 #include "st_ultis.h"
 using namespace st::sync;
 using namespace st::ie;
@@ -74,7 +74,7 @@ struct inference_output {
 using response_mq = blocking_queue<inference_output::ptr>;
 
 namespace st {
-namespace worker {
+namespace experimental {
 
 // class session : public std::enable_shared_from_this<session> {
 // private:

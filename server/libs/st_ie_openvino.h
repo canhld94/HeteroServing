@@ -234,6 +234,7 @@ class openvino_inference_engine : public inference_engine {
                          .as<PrecisionTrait<Precision::FP32>::value_type*>();
           assert(input_width > 0);
           assert(input_height > 0);
+          std::cout << input_width << " " << input_height << std::endl;
           p[0] = static_cast<float>(input_width);
           p[1] = static_cast<float>(input_height);
         }

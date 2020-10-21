@@ -26,7 +26,7 @@
 // typedef bpt::ptree JSON;               // just hiding the ugly name
 
 #include "st_ie_base.h"
-#include "st_sync.h"
+#include "st_message_queue.h"
 #include "st_ultis.h"
 
 namespace st {

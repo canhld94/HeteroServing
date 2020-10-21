@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package st.grpc;
+
+service inference_engine_grpc {
+    rpc run(encoded_image) returns (detection_output) {}
+}
+
+message encoded_image {
+    bytes data = 1;
+    int32 size = 2;
+}
+
+message detection_output {
+    message rectangle {
+        int32 xmin = 1;
+        int32 xmax = 2;
+        int32 ymin = 3;
+        int32 ymax= 4;
+    }
+    message bouding_box {
+        int32 label_id = 1;
+        string label = 2;
+        float prob = 3;
+        rectangle box = 4;
+    }
+    repeated bouding_box bboxes = 1;
+}

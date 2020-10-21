@@ -2,8 +2,7 @@
  * Copyright (C) 2020 canhld@.kaist.ac.kr
  * SPDX-License-Identifier: Apache-2.0
  * @b About: This file implement the synchronization template that will be use
- *in producer
- * - consumer execution model
+ * in producer - consumer execution model
  ***************************************************************************************/
 
 #pragma once

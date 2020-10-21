@@ -17,7 +17,6 @@
 #include <boost/property_tree/json_parser.hpp>
 #include <inference_engine.hpp>
 #include "st_async_worker.h"
-#include "st_exception.h"
 #include "st_ie_base.h"
 #include "st_ie_factory.h"
 #include "st_ultis.h"
@@ -28,9 +27,8 @@ namespace bpt = boost::property_tree;  // from <boots/property_tree>
 namespace fs = boost::filesystem;      // from <boots/filesystem>
 typedef bpt::ptree JSON;               // just hiding the ugly name
 using namespace st::sync;
-using namespace st::worker;
+using namespace st::experimental;
 using namespace st::ie;
-using namespace st::exception;
 
 /// @brief message for help argument
 constexpr char help_message[] = "Print this message.";

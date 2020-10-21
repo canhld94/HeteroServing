@@ -38,6 +38,7 @@ void matU8ToBlob(const cv::Mat& orig_image, Blob::Ptr& blob,
   const size_t width = blobSize[3];
   const size_t height = blobSize[2];
   const size_t channels = blobSize[1];
+  std::cout << width << " - " << height << std::endl;
   T* blob_data = blob->buffer().as<T*>();
 
   cv::Mat resized_image(orig_image);
