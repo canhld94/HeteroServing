@@ -27,7 +27,7 @@
 
 #include "st_ie_base.h"
 #include "st_message_queue.h"
-#include "st_ultis.h"
+#include "st_utils.h"
 using namespace st::sync;
 using namespace st::ie;
 

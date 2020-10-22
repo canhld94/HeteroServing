@@ -10,7 +10,7 @@
 #include "st_ie_base.h"
 #include "st_ie_openvino.h"
 #include "st_ie_tensorrt.h"
-#include "st_ultis.h"
+#include "st_utils.h"
 
 namespace st {
 namespace ie {

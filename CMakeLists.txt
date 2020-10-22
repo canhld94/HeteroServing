@@ -4,6 +4,7 @@
 cmake_minimum_required (VERSION 3.13)
 
 project(something)
+
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 if (CMAKE_BUILD_TYPE STREQUAL "")
@@ -37,7 +38,7 @@ set (LIBRARY_OUTPUT_DIRECTORY ${PROJECT_DIR}/${BIN_FOLDER}/${CMAKE_BUILD_TYPE}/l
 set (LIBRARY_OUTPUT_PATH ${LIBRARY_OUTPUT_DIRECTORY}/lib)
 
 
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-error=deprecated-declarations") #treating warnings as errors
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-error=deprecated-declarations -Wno-error=array-bounds") #treating warnings as errors
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wuninitialized -Winit-self")
 
 ####################################
@@ -64,14 +65,22 @@ include_directories (
 # OpenCV and Inference Engine and TBB come with openvino
 find_package(OpenCV REQUIRED)
 find_package(InferenceEngine 1.6 REQUIRED)
-
 # CUDA, CUDNN, TensorRT
 find_package(CUDA REQUIRED)
 set(TensorRT_ROOT "/home/canhld/softwares/TensorRT-7.1.3.4/")
 find_package(TensorRT REQUIRED)
 
-message(STATUS ${CUDA_LIBRARIES})
 
+# GRPC & protobuf
+set(Protobuf_MODULE_COMPATIBLE TRUE)
+find_package(Protobuf CONFIG REQUIRED)
+message(STATUS "Using protobuf ${Protobuf_VERSION}")
+set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
+
+find_package(gRPC CONFIG REQUIRED)
+message(STATUS "Using gRPC ${gRPC_VERSION}")
+set(_REFLECTION gRPC::grpc++_reflection)
+set(_GRPC_GRPCPP gRPC::grpc++)
 # Other libraries: boost, gflags, gtest, spdlog is managed by conan
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup()

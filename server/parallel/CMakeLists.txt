@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-add_executable(parallel_server st_server_parallel.cpp)
+add_executable(parallel_server ${RPC_SRC} st_server_parallel.cpp)
 
 set_target_properties(parallel_server PROPERTIES "CMAKE_CXX_FLAGS" "${CMAKE_CXX_FLAGS} -fPIE")
 
@@ -14,7 +14,11 @@ target_link_libraries(parallel_server
                         ${OpenCV_LIBRARIES}
                         ${InferenceEngine_LIBRARIES}
                         ${CUDA_LIBRARIES}
-                        ${TensorRT_LIBRARIES})
+                        ${TensorRT_LIBRARIES}
+                        ${gRPC_LIBRARIES}
+                        ${_REFLECTION}
+                        ${_GRPC_GRPCPP}
+                        ${_PROTOBUF_LIBPROTOBUF})
 
 install(TARGETS parallel_server
         RUNTIME DESTINATION bin

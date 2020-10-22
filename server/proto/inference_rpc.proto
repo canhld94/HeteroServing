@@ -1,9 +1,11 @@
+
+
 syntax = "proto3";
 
-package st.grpc;
+package st.rpc;
 
-service inference_engine_grpc {
-    rpc run(encoded_image) returns (detection_output) {}
+service inference_rpc {
+    rpc run_detection(encoded_image) returns (detection_output) {}
 }
 
 message encoded_image {
@@ -14,8 +16,8 @@ message encoded_image {
 message detection_output {
     message rectangle {
         int32 xmin = 1;
-        int32 xmax = 2;
-        int32 ymin = 3;
+        int32 ymin = 2;
+        int32 xmax = 3;
         int32 ymax= 4;
     }
     message bouding_box {
