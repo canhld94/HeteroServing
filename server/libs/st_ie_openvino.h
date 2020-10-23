@@ -15,7 +15,6 @@
 #include <ext_list.hpp>
 #include <inference_engine.hpp>
 #include <opencv2/opencv.hpp>
-#include "st_exception.h"
 #include "st_ie_base.h"
 
 // OpenVino Inference Engine

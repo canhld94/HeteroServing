@@ -5,8 +5,8 @@
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
-#include "proto/inference_rpc.grpc.pb.h"
-#include "proto/inference_rpc.pb.h"
+#include "stubs/inference_rpc.grpc.pb.h"
+#include "stubs/inference_rpc.pb.h"
 #include "st_utils.h"
 #include "st_message_queue.h" 
 
@@ -43,12 +43,12 @@ class inference_rpc_impl final : public inference_rpc::Service {
         rpc_bbox->set_label_id(pred.label_id);
         rpc_bbox->set_label(pred.label);
         rpc_bbox->set_prob(pred.prop);
-        st::rpc::detection_output_rectangle rec;
-        rec.set_xmin(pred.c[0]);
-        rec.set_ymin(pred.c[1]);
-        rec.set_xmax(pred.c[2]);
-        rec.set_ymax(pred.c[3]);
-        rpc_bbox->set_allocated_box(&rec);
+        st::rpc::detection_output_rectangle *rec = new st::rpc::detection_output_rectangle();
+        rec->set_xmin(pred.c[0]);
+        rec->set_ymin(pred.c[1]);
+        rec->set_xmax(pred.c[2]);
+        rec->set_ymax(pred.c[3]);
+        rpc_bbox->set_allocated_box(rec);
       }
       return Status::OK;
     }

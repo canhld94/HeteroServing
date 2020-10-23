@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <boost/config.hpp>
 #include <boost/filesystem.hpp>
-#include "st_exception.h"
 #include "st_ie_base.h"
 #include "st_ie_factory.h"
 #include "st_worker.h"

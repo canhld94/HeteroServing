@@ -31,18 +31,14 @@ endif()
 
 set (CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_DIR}/${BIN_FOLDER}/${CMAKE_BUILD_TYPE}/lib)
 set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_DIR}/${BIN_FOLDER}/${CMAKE_BUILD_TYPE}/lib)
-set (CMAKE_COMPILE_PDB_OUTPUT_DIRECTORY ${PROJECT_DIR}/${BIN_FOLDER}/${CMAKE_BUILD_TYPE})
-set (CMAKE_PDB_OUTPUT_DIRECTORY ${PROJECT_DIR}/${BIN_FOLDER}/${CMAKE_BUILD_TYPE})
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_DIR}/${BIN_FOLDER}/${CMAKE_BUILD_TYPE})
 set (LIBRARY_OUTPUT_DIRECTORY ${PROJECT_DIR}/${BIN_FOLDER}/${CMAKE_BUILD_TYPE}/lib)
 set (LIBRARY_OUTPUT_PATH ${LIBRARY_OUTPUT_DIRECTORY}/lib)
 
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-error=deprecated-declarations -Wno-error=array-bounds") #treating warnings as errors
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wuninitialized -Winit-self")
 
-####################################
-## to use C++11
+###################################### to use C++11
 set (CMAKE_CXX_STANDARD 11)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 if (CMAKE_CXX_COMPILER_ID STREQUAL GNU)
@@ -57,19 +53,37 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL GNU)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 endif()
 
-include_directories (
-        ${CMAKE_CURRENT_SOURCE_DIR}/common
-)
-
 # Package manager
-# OpenCV and Inference Engine and TBB come with openvino
+# OpenCV and Inference Engine come with openvino
+if (INTEL_OPENVINO_DIR STREQUAL "")
+    set(INTEL_OPENVINO_DIR $ENV{INTEL_OPENVINO_DIR})
+endif()
+if (NOT INTEL_OPENVINO_DIR STREQUAL "")
+    message(STATUS "Looking for inference engine and opencv in ${INTEL_OPENVINO_DIR}")
+    list(APPEND CMAKE_PREFIX_PATH ${INTEL_OPENVINO_DIR})
+endif()
 find_package(OpenCV REQUIRED)
-find_package(InferenceEngine 1.6 REQUIRED)
-# CUDA, CUDNN, TensorRT
+find_package(InferenceEngine REQUIRED)
+# CUDA
+if (CUDA_INSTALL_DIR STREQUAL "")
+    set(CUDA_INSTALL_DIR $ENV{CUDA_INSTALL_DIR})
+endif()
+if (NOT CUDA_INSTALL_DIR STREQUAL "")
+    message(STATUS "Looking for CUDA in ${CUDA_INSTALL_DIR}")
+    list(APPEND CMAKE_PREFIX_PATH ${CUDA_INSTALL_DIR})
+endif()
 find_package(CUDA REQUIRED)
-set(TensorRT_ROOT "/home/canhld/softwares/TensorRT-7.1.3.4/")
+# TensorRT
+if (TensorRT_ROOT STREQUAL "")
+    set(TensorRT_ROOT $ENV{TensorRT_ROOT})
+endif()
+if (NOT TensorRT_ROOT STREQUAL "")
+    message(STATUS "Looking for TensorRT in ${TensorRT_ROOT}")
+    list(APPEND CMAKE_PREFIX_PATH ${TensorRT_ROOT})
+endif()
 find_package(TensorRT REQUIRED)
 
+# clone all submodules
 
 # GRPC & protobuf
 set(Protobuf_MODULE_COMPATIBLE TRUE)
@@ -81,13 +95,13 @@ find_package(gRPC CONFIG REQUIRED)
 message(STATUS "Using gRPC ${gRPC_VERSION}")
 set(_REFLECTION gRPC::grpc++_reflection)
 set(_GRPC_GRPCPP gRPC::grpc++)
+
 # Other libraries: boost, gflags, gtest, spdlog is managed by conan
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup()
 
 # Project components
 add_subdirectory(server)
-# add_subdirectory(fcn16s)
 
 # Install to root
 set (CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_SOURCE_DIR})
