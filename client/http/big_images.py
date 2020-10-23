@@ -118,7 +118,7 @@ class App():
 if __name__ == '__main__':
     # srcpath: path to image folder
     # ip & port
-    app = App(srcpath = r'imgs', ip=r'localhost', port=r'8080')
+    app = App(srcpath = r'../imgs', ip=r'localhost', port=r'8080')
     # name: name of the image we want to run
     # ext: image extension
     app.run(name=r'AirbusDrone',ext=r'.jpg')

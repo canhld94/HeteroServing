@@ -12,9 +12,7 @@ def simple_client(image, ip, port):
   headers = {'Content-Type': 'image/jpeg'}
 
   # No need to decode, just read the raw byte and send
-  body = open(sys.argv[1],'rb')
-  ip = sys.argv[2]
-  port = sys.argv[3]
+  body = open(image,'rb')
   conn = http.client.HTTPConnection(ip+":"+str(port))
 
   # POST to /inference with body is the image
@@ -36,7 +34,7 @@ def simple_client(image, ip, port):
       draw.rectangle((tl,br),outline = "red", width = 3)
       draw.text((int(bbox[0]),int(bbox[1])-10), label + " " + str(round(score,2)))
 
-  im.save("testing.jpg","jpg")
+  im.save("testing.jpg","jpeg")
 
 if __name__ == '__main__':
-  simple_client(image=r'imgs/AirbusDrone.jpg', ip=r'localhost', port=8081)
+  simple_client(image=r'imgs/port.jpg', ip=r'localhost', port=8081)
