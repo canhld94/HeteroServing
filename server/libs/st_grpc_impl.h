@@ -8,7 +8,7 @@
 #include "stubs/inference_rpc.grpc.pb.h"
 #include "stubs/inference_rpc.pb.h"
 #include "st_utils.h"
-#include "st_message_queue.h" 
+#include "st_ie_common.h" 
 
 using grpc::Server;
 using grpc::ServerBuilder;

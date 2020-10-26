@@ -9,6 +9,7 @@
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <vector>
+#include "st_message_queue.h"
 
 using namespace InferenceEngine;
 using namespace nvinfer1;
@@ -25,6 +26,43 @@ struct bbox {
   float prop;         //!< confidence score
   int c[4];           //!< coordinates of bounding box
 };
+
+/**
+ * @brief Message template that can hold object detection result
+ *
+ * @tparam simple_bell
+ */
+template <class simple_bell>
+using obj_detection_msg =
+    st::sync::message<const char*, int, std::vector<bbox>*, simple_bell>;
+
+/**
+ * @brief Message template that can old classification result
+ *
+ * @tparam simple_bell
+ */
+template <class simple_bell>
+using classification_msg =
+     st::sync::message<const char*, int, std::vector<int>*, simple_bell>;
+
+/**
+ * @brief Object detection message queue that can be used to exchange object
+ * detection message
+ *
+ * @tparam simple_bell
+ */
+template <class simple_bell>
+using object_detection_mq =  st::sync::blocking_queue<obj_detection_msg<simple_bell>>;
+
+/**
+ * @brief Classification message queue than can be used to exchange the
+ * classification message
+ *
+ * @tparam simple_bell
+ */
+template <class simple_bell>
+using classification_mq =  st::sync::blocking_queue<classification_msg<simple_bell>>;
+
 /**
 * @brief Sets image data stored in cv::Mat object to a given Blob object.
 * @param orig_image - given cv::Mat object with an image data.
@@ -38,7 +76,7 @@ void matU8ToBlob(const cv::Mat& orig_image, Blob::Ptr& blob,
   const size_t width = blobSize[3];
   const size_t height = blobSize[2];
   const size_t channels = blobSize[1];
-  std::cout << width << " - " << height << std::endl;
+  // std::cout << width << " - " << height << std::endl;
   T* blob_data = blob->buffer().as<T*>();
 
   cv::Mat resized_image(orig_image);

@@ -12,9 +12,6 @@
 #include <mutex>
 #include <string>
 #include <vector>
-#include "st_ie_base.h"
-
-using st::ie::bbox;
 
 namespace st {
 namespace sync {
@@ -119,16 +116,14 @@ class simple_bell {
 /**
  * @brief Single bell type
  * @details With single bell, each producer will have a bell and all user need
- * to do is ring
- * the bell to notify the consumer
+ * to do is ring the bell to notify the consumer
  */
 using single_bell = simple_bell<int, int, 0>;
 
 /**
  * @brief Shared bell type
  * @details With shared bell, all producer share a bell, and each producer will
- * have its
- * own key. Before ringing the bell, consumer set the key
+ * have its own key. Before ringing the bell, consumer set the key
  * @tparam reset_state
  */
 template <const char* reset_state>
@@ -150,11 +145,11 @@ class message {
   Ssize size;               //!< Size of the data
   ResponsePtr predictions;  //!< The prediction, inference engine will write the
                             //! result here
-  BellPtr bell;  //!< The bell object that consumer will used to notify producer
-                 /**
-                  * @brief Construct a new message object
-                  *
-                  */
+  BellPtr bell;             //!< The bell object that consumer will used to notify producer
+  /**
+  * @brief Construct a new message object
+  *
+  */
   message() : data(nullptr), size(-1), predictions(nullptr), bell(nullptr) {}
   /**
    * @brief Construct a new message object
@@ -212,28 +207,9 @@ class message {
 };
 
 /**
- * @brief Message template that can hold object detection result
- *
- * @tparam simple_bell
- */
-template <class simple_bell>
-using obj_detection_msg =
-    message<const char*, int, std::vector<bbox>*, simple_bell>;
-
-/**
- * @brief Message template that can old classification result
- *
- * @tparam simple_bell
- */
-template <class simple_bell>
-using classification_msg =
-    message<const char*, int, std::vector<int>*, simple_bell>;
-
-/**
  * @brief The communication channel between producer and consumer
  * @details Producer and Consumer will send and recieve messagge throught this
- * channel. A channel
- * must be in with a message type.
+ * channel. A channel must be in with a message type.
  * @tparam Message Message type
  * @tparam DeQue Queue type, default std::deque
  * @tparam CondVar
@@ -246,9 +222,8 @@ template <class Message, class DeQue = std::deque<Message>,
 class blocking_queue {
  private:
   DeQue queue;  //!< The actual channel
-  CondVar
-      cv;  //!< Convar that used to block poping the queue when queue is empty
-  Mutex mtx;  //!< Associated mutex
+  CondVar cv;   //!< Convar that used to block poping the queue when queue is empty
+  Mutex mtx;    //!< Associated mutex
 
  public:
   /**
@@ -299,22 +274,5 @@ class blocking_queue {
   using ptr = std::shared_ptr<blocking_queue>;
 };
 
-/**
- * @brief Object detection message queue that can be used to exchange object
- * detection message
- *
- * @tparam simple_bell
- */
-template <class simple_bell>
-using object_detection_mq = blocking_queue<obj_detection_msg<simple_bell>>;
-
-/**
- * @brief Classification message queue than can be used to exchange the
- * classification message
- *
- * @tparam simple_bell
- */
-template <class simple_bell>
-using classification_mq = blocking_queue<classification_msg<simple_bell>>;
 }
 }

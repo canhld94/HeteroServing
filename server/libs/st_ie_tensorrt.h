@@ -91,7 +91,7 @@ class tensorrt_inference_engine : public inference_engine {
     trt_unique_ptr<IBuilderConfig> config{builder->createBuilderConfig()};
     assert(config);
     // builder->setMaxBatchSize(N);
-    config->setMaxWorkspaceSize(1 << 25);  // 512MB
+    config->setMaxWorkspaceSize(1 << 20);  // 512MB
     // enable fp16
     if (fp16) {
       config->setFlag(BuilderFlag::kFP16);

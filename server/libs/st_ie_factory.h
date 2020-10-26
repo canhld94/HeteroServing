@@ -88,7 +88,7 @@ class inference_engine_creator {
   virtual inference_engine::ptr create(JSON& conf) = 0;
 };
 
-class cpu_inference_engine_creator : public inference_engine_creator {
+class intel_cpu_inference_engine_creator : public inference_engine_creator {
  public:
   inference_engine::ptr create(JSON& conf) final {
     std::string plugin = "CPU";
@@ -139,9 +139,10 @@ class xilinx_gpu_inference_engine_creator : public inference_engine_creator {
  */
 class ie_factory {
  public:
+  typedef std::unordered_map<std::string, inference_engine_creator*> factory_map;
   ie_factory() {
     // register your plugin here and do not modify anything outside of this
-    Register("intel cpu", new cpu_inference_engine_creator());
+    Register("intel cpu", new intel_cpu_inference_engine_creator());
     Register("intel fpga", new intel_fpga_inference_engine_creator());
     Register("nvidia gpu", new nvidia_gpu_inference_engine_creator());
   }
@@ -156,6 +157,7 @@ class ie_factory {
    */
   inference_engine::ptr create_inference_engine(JSON& conf) {
     const std::string& device = conf.get<std::string>("device");
+    auto registry = get_registry();
     auto it = registry.find(device);
     if (it == registry.end()) {
       throw std::logic_error("Creator of [" + device + "] not found in registry");
@@ -164,14 +166,19 @@ class ie_factory {
     return creator->create(conf);
   }
 
- private:
-  std::unordered_map<std::string, inference_engine_creator*> registry;
   void Register(std::string device, inference_engine_creator* creator) {
+    auto registry = get_registry();
     auto it = registry.find(device);
     if (it != registry.end()) {
       throw std::logic_error("Creator of [" + device + "] has already been in registry");
     }
     registry.insert({device, creator});
+  }
+
+ private:
+  static factory_map get_registry() {
+    static factory_map registry;
+    return registry;
   }
 };
 }
