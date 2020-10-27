@@ -10,6 +10,7 @@
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <vector>
+#include <iostream>
 
 using namespace nvinfer1;
 using namespace half_float;
@@ -56,15 +57,20 @@ class generic_buffer {
 
 struct host_allocator {
   bool operator()(void** data, size_t size) {
+    std::cout << "Allocate " << size << " bytes on host" << std::endl; 
     *data = malloc(size);
-    return data != nullptr;
+    return *data != nullptr;
   }
 };
 struct host_deleter {
   void operator()(void* data) { free(data); }
 };
 struct gpu_allocator {
-  bool operator()(void** data, size_t size) { return cudaMalloc(data, size); }
+  bool operator()(void** data, size_t size) { 
+    std::cout << "Allocate " << size << " bytes on device" << std::endl;
+    // cudaMalloc return 0 on success
+    return cudaMalloc(data, size) == cudaSuccess; 
+  }
 };
 struct gpu_deleter {
   void operator()(void* data) { cudaFree(data); }
@@ -80,7 +86,7 @@ class flat_buffer : public generic_buffer {
  public:
   using value_type = T;
   flat_buffer() { generic_buffer(); }
-  flat_buffer(size_t _size) {
+  flat_buffer(size_t _size) : generic_buffer() {
     size = _size, nbytes = size * sizeof(T);
     if (!alloc_fn(&data, nbytes)) {
       throw std::bad_alloc();
@@ -94,14 +100,17 @@ class flat_buffer : public generic_buffer {
   void fill_from_mat(cv::Mat& orig_image, Dims& dim,
                      int batch_id) override {
     assert(data != nullptr);
-    assert(dim.nbDims == 4);
+    assert(dim.nbDims == 3);
     // default NCHW
-    size_t channels = dim.d[1], height = dim.d[2],
-        width = dim.d[3];
+    size_t channels = dim.d[0], height = dim.d[1],
+        width = dim.d[2];
     // assert(batch_size == 1);
     // assert(size == batch_size * channels * height * width);
     // resize the mat data to chw
     cv::Mat resized_image(orig_image);
+    std::cout << channels << std::endl;
+    std::cout << orig_image.size().height << "->" << height << std::endl;
+    std::cout << orig_image.size().width << "->" << width << std::endl;
     if (static_cast<int>(height) != orig_image.size().height ||
         static_cast<int>(width) != orig_image.size().width) {
       cv::resize(orig_image, resized_image, cv::Size(width, height));
@@ -112,12 +121,13 @@ class flat_buffer : public generic_buffer {
     auto typed_data = (value_type*) data;
     for (size_t c = 0; c < channels; ++c) {
       for (size_t h = 0; h < height; ++h) {
-        for (size_t w = 0; h < width; ++w) {
+        for (size_t w = 0; w < width; ++w) {
           typed_data[batch_offset + c * width * height + h * width + w] =
               resized_image.at<cv::Vec3b>(h, w)[c];
         }
       }
     }
+    std::cout << "Filled buffer with data" << std::endl;
     return;
   }
 
@@ -206,7 +216,8 @@ class buffer_manager {
     for (int i = 0; i < k; ++i) {
       // get type of bindings and binding names
       auto dtype = engine.getBindingDataType(i);
-      // auto name = engine.getBindingName(i);
+      auto name = engine.getBindingName(i);
+      std::cout << name << std::endl;
       // calcuate the size of bindings
       size_t vol = 1;
       auto dims = context->getBindingDimensions(i);
@@ -220,11 +231,7 @@ class buffer_manager {
     }
   }
   // get an input blob by name and fill data
-  void fill_input(std::string tensorname, cv::Mat& img) {
-    int index = engine.getBindingIndex(tensorname.c_str());
-    if (index == -1) {
-      throw std::logic_error("TRT network has no tensor name " + tensorname);
-    }
+  void fill_input(int index, cv::Mat& img) {
     Dims dim = context->getBindingDimensions(index);
     blobs[index].host_mem->fill_from_mat(img, dim, 0);  // currently support batch 1
   }
@@ -233,7 +240,13 @@ class buffer_manager {
   // iterate all output blobs, copy data from gpu to host
   void memcpy_output_dtoh() { memcpy_buffer(false, false, false); }
   // get device binding for executions
-  std::vector<void*> get_bindings() const { return gpu_bindings; }
+  std::vector<void*> get_bindings() const {
+    for (auto &v : gpu_bindings) {
+      std::cout << v << " ";
+    }
+    std::cout << std::endl;
+    return gpu_bindings; 
+  }
 
  private:
   // get the buffer associcate to tensorname
