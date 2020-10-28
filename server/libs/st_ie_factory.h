@@ -157,7 +157,8 @@ class ie_factory {
    */
   inference_engine::ptr create_inference_engine(JSON& conf) {
     const std::string& device = conf.get<std::string>("device");
-    auto registry = get_registry();
+    auto &registry = get_registry();
+    std::cout << &registry << std::endl;
     auto it = registry.find(device);
     if (it == registry.end()) {
       throw std::logic_error("Creator of [" + device + "] not found in registry");
@@ -167,16 +168,18 @@ class ie_factory {
   }
 
   void Register(std::string device, inference_engine_creator* creator) {
-    auto registry = get_registry();
+    auto &registry = get_registry();
+    std::cout << &registry << std::endl;
     auto it = registry.find(device);
     if (it != registry.end()) {
       throw std::logic_error("Creator of [" + device + "] has already been in registry");
     }
+    std::cout << "Adding creator of [" << device << "] to the registry" << std::endl;
     registry.insert({device, creator});
   }
 
  private:
-  static factory_map get_registry() {
+  static factory_map& get_registry() {
     static factory_map registry;
     return registry;
   }
