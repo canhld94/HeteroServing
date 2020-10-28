@@ -122,7 +122,7 @@ struct network_output {
  * @brief Simple logging that will just print to screen when error
  *
  */
-class logger : public ILogger {
+class trtlogger : public ILogger {
   void log(Severity serverity, const char* msg) override {
     if (serverity != Severity::kINFO) {
       std::cout << msg << std::endl;

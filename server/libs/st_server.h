@@ -11,10 +11,12 @@
 #include "st_worker.h"
 #include "st_utils.h"
 #include "st_grpc_impl.h"
+#include "st_logging.h"
 using namespace st::sync;
 using namespace st::worker;
 using namespace st::rpc;
 using namespace st::ie;
+using namespace st::log;
 
 namespace st {
 class server {
@@ -38,12 +40,6 @@ class http_server : public server {
     http_server(JSON &_config) : server(_config) {};
     virtual void run() override {
       try {
-      // Set the default logger to file logger
-      auto file_logger =
-          spdlog::basic_logger_mt("basic_logger", "logs/basic.txt");
-      spdlog::set_default_logger(file_logger);
-      spdlog::set_level(spdlog::level::info);
-      spdlog::info("Log started!");
       // parsing
       // server
       auto ip = config.get<std::string>("ip");
@@ -123,12 +119,6 @@ class grpc_server : public server {
     grpc_server(JSON &_config) : server(_config) {};
     virtual void run() override {
         try {
-        // Set the default logger to file logger
-        auto file_logger =
-            spdlog::basic_logger_mt("basic_logger", "logs/basic.txt");
-        spdlog::set_default_logger(file_logger);
-        spdlog::set_level(spdlog::level::info);
-        spdlog::info("Log started!");
         // parsing
         // server
         auto ip = config.get<std::string>("ip");

@@ -14,25 +14,18 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-#include <spdlog/sinks/basic_file_sink.h>
-#include <spdlog/spdlog.h>
-
-// namespace beast = boost::beast;        // from <boost/beast.hpp>
-// namespace http = beast::http;          // from <boost/beast/http.hpp>
-// namespace net = boost::asio;           // from <boost/asio.hpp>
-// namespace bpt = boost::property_tree;  // from <boots/property_tree>
-// using tcp = boost::asio::ip::tcp;      // from <boost/asio/ip/tcp.hpp>
-// typedef bpt::ptree JSON;               // just hiding the ugly name
-
 #include "st_ie_base.h"
 #include "st_message_queue.h"
 #include "st_utils.h"
+#include "st_logging.h"
+
 
 namespace st {
 namespace worker {
 using st::ie::bbox;
 using namespace st::sync;
+using namespace st::log;
+using namespace st::ie;
 /**
  * @brief pure abstract worker thread
 */
@@ -80,7 +73,7 @@ class sync_inference_worker : public sync_worker {
   sync_inference_worker(IEPtr& _Ie,
                         object_detection_mq<single_bell>::ptr& _taskq)
       : Ie(_Ie), taskq(_taskq) {
-    spdlog::info("Init inference worker!");
+    console->info("Init inference worker!");
   }
   /**
    * @brief Destroy the inference worker object
@@ -93,14 +86,14 @@ class sync_inference_worker : public sync_worker {
     // start listening to the queue
     try {
       for (;;) {
-        spdlog::debug("[IEW] Waiting for new task");
+        console->debug("[IEW] Waiting for new task");
         auto m = taskq->pop();
-        spdlog::info("[IEW] Invoke inference engine {}", taskq->size());
+        console->debug("[IEW] Invoke inference engine {}", taskq->size());
         *m.predictions = Ie->run_detection(m.data, m.size);
-        spdlog::debug("[IEW] Done inferencing, predidiction size = {}",
+        console->debug("[IEW] Done inferencing, predidiction size = {}",
                       m.predictions->size());
         // Push to queue and notify the sync_http_worker
-        spdlog::debug("[IEW] signaling request thread");
+        console->debug("[IEW] signaling request thread");
         m.bell->ring(1);
       }
     } catch (const std::exception& e) {
@@ -140,7 +133,7 @@ class sync_http_worker : public sync_worker {
         data(_data),
         taskq(_taskq) {
     bell = std::make_shared<single_bell>();
-    spdlog::info("Init new http worker!");
+    console->info("Init new http worker!");
   }
   /**
    * @brief
@@ -163,18 +156,18 @@ class sync_http_worker : public sync_worker {
   void* data;                //!< pointer to data, i.e dashboard
   object_detection_mq<single_bell>::ptr taskq;  //!< task queue
   single_bell::ptr bell;                        //!< notify bell
-                                                // private method
-                                                /**
-                                                * @brief This funtion generate error response
-                                                * @details Depend on the type of error status, different responses messages
-                                                * are generated
-                                                * @tparam Body
-                                                * @tparam Alocator
-                                                * @param req
-                                                * @param status
-                                                * @param why
-                                                * @return http::response<http::string_body>
-                                                */
+  // private method
+  /**
+  * @brief This funtion generate error response
+  * @details Depend on the type of error status, different responses messages
+  * are generated
+  * @tparam Body
+  * @tparam Alocator
+  * @param req
+  * @param status
+  * @param why
+  * @return http::response<http::string_body>
+  */
   http::response<http::string_body> error_message(beast_basic_request& req,
                                                   http::status status,
                                                   beast::string_view why) {
@@ -279,14 +272,14 @@ class sync_http_worker : public sync_worker {
     // exception handling in run, no need to santiny check
     // push to queue
     obj_detection_msg<single_bell> m{data, size, &prediction, bell};
-    spdlog::debug("[HTTPW {}] enqueue my task {}",
+    console->debug("[HTTPW {}] enqueue my task {}",
                   boost::lexical_cast<std::string>(std::this_thread::get_id()),
                   taskq->size());
     taskq->push(m);
-    spdlog::debug("[HTTPW {}] waiting for IEW",
+    console->debug("[HTTPW {}] waiting for IEW",
                   boost::lexical_cast<std::string>(std::this_thread::get_id()));
     bell->wait(1);
-    spdlog::debug("[HTTPW {}] recieved data",
+    console->debug("[HTTPW {}] recieved data",
                   boost::lexical_cast<std::string>(std::this_thread::get_id()));
     int n = prediction.size();
     // create property tree and write to json
@@ -435,7 +428,7 @@ class sync_http_worker : public sync_worker {
     }
     // If we can reach here, the the request is successful
     // Shut down the socket and return
-    spdlog::info("[HTTPW] Shutdown my socket!");
+    console->info("[HTTPW] Shutdown my socket!");
     sock.shutdown(tcp::socket::shutdown_send, ec);
     return;
   }  // session_handler

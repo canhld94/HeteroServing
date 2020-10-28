@@ -7,6 +7,7 @@
 #include <gflags/gflags.h>
 #include <iostream>
 #include "st_server.h"
+#include "st_logging.h"
 
 /// @brief message for help argument
 constexpr char help_message[] = "Print this message.";
@@ -64,6 +65,7 @@ int main(int argc, char const* argv[]) {
     if (!parse_and_check_cmd_line(argc, const_cast<char**>(argv))) {
       return 0;
     }
+    st::log::init_log();
     std::cout << "Loading server configuration from " << FLAGS_f << std::endl;
     if (!fs::exists(FLAGS_f)) {
       std::cout << "WARNING: server configuration file is not exist or invalid"
