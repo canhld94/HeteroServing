@@ -4,7 +4,7 @@ Everybody (include [Circle CI](https://twitter.com/circleci/status/9516358529748
 
 ## Introduction
 
-This project build an inference server with ~~Intel FPGA~~ Intel CPU, Intel FPGA, and NVIDIA GPU backend. Currently the inference engine supports object detection object detection models (`SSD`, `YoLov3`*, and `Faster R-CNN` family); and the server support REST API. At a glance:
+This project build an inference server with ~~Intel FPGA~~ Intel CPU, Intel FPGA, and NVIDIA GPU backend. Currently the inference engine supports object detection object detection models (`SSD`, `YoLov3`*, and `Faster R-CNN` family); and the server support ~~REST~~ gRPC and REST. At a glance:
 
 *Request*
 

@@ -8,7 +8,15 @@
 
 namespace st {
 namespace log {
-  static std::shared_ptr<spdlog::logger> console = spdlog::stdout_color_mt("console");
+  // framework specific log
+  static std::shared_ptr<spdlog::logger> ovn_log = spdlog::stdout_color_mt("openvino");
+  static std::shared_ptr<spdlog::logger> trt_log = spdlog::stdout_color_mt("tensorrt");
+  // component log
+  static std::shared_ptr<spdlog::logger> server_log = spdlog::stdout_color_mt("server");
+  static std::shared_ptr<spdlog::logger> http_log = spdlog::stdout_color_mt("http");
+  static std::shared_ptr<spdlog::logger> rpc_log = spdlog::stdout_color_mt("grpc");
+  static std::shared_ptr<spdlog::logger> ie_log = spdlog::stdout_color_mt("ie");
+  // file syslog for deploy
   static std::shared_ptr<spdlog::logger> file_log = spdlog::basic_logger_mt("server_log", "logs/logs.txt");
 
   void init_log() {
@@ -17,6 +25,7 @@ namespace log {
     #else
       spdlog::set_level(spdlog::level::debug);
     #endif
+    spdlog::set_pattern("[%H:%M:%S] [tid %t] [%n] [%l] %v");
   }
 }
 }

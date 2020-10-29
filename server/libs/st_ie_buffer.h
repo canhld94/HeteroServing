@@ -59,7 +59,7 @@ class generic_buffer {
 
 struct host_allocator {
   bool operator()(void** data, size_t size) {
-    console->debug("Allocate {} bytes on host", size);
+    trt_log->trace("Allocate {} bytes on host", size);
     *data = malloc(size);
     return *data != nullptr;
   }
@@ -69,7 +69,7 @@ struct host_deleter {
 };
 struct gpu_allocator {
   bool operator()(void** data, size_t size) { 
-    console->debug("Allocate {} bytes on device", size);
+    trt_log->trace("Allocate {} bytes on device", size);
     // cudaMalloc return 0 on success
     return cudaMalloc(data, size) == cudaSuccess; 
   }
@@ -96,7 +96,7 @@ class flat_buffer : public generic_buffer {
   }
   ~flat_buffer() override {
     // debug
-    console->debug("Free allocated memory");
+    trt_log->trace("Free allocated memory");
     free_fn(data); 
     }
   void fill_from_mat(cv::Mat& orig_image, Dims& dim,
@@ -110,9 +110,9 @@ class flat_buffer : public generic_buffer {
     // assert(size == batch_size * channels * height * width);
     // resize the mat data to chw
     cv::Mat resized_image(orig_image);
-    console->debug("Input image channels: {}", channels);
-    console->debug("{}->{}", orig_image.size().height, height);
-    console->debug("{}->{}", orig_image.size().width, width);
+    trt_log->debug("Input image channels: {}", channels);
+    trt_log->debug("Resize image height {}->{}", orig_image.size().height, height);
+    trt_log->debug("Resize image width {}->{}", orig_image.size().width, width);
     if (static_cast<int>(height) != orig_image.size().height ||
         static_cast<int>(width) != orig_image.size().width) {
       cv::resize(orig_image, resized_image, cv::Size(width, height));
@@ -206,7 +206,7 @@ struct blob {
 */
 class buffer_manager {
  public:
-  buffer_manager(trt_shared_ptr<IExecutionContext> _context)
+  buffer_manager(IExecutionContext* _context)
       : context(_context) {
     std::unique_ptr<buffer_factory> host_factory{new host_buffer_factory};
     std::unique_ptr<buffer_factory> gpu_factory{new gpu_buffer_factory};
@@ -218,7 +218,7 @@ class buffer_manager {
       auto dtype = engine.getBindingDataType(i);
       assert(dtype == DataType::kFLOAT);
       // auto name = engine.getBindingName(i);
-      console->debug("Binding name: {}", engine.getBindingDataType(i));
+      trt_log->debug("Binding name: {}", engine.getBindingName(i));
       // calcuate the size of bindings
       size_t vol = 1;
       auto dims = context->getBindingDimensions(i);
@@ -270,7 +270,7 @@ class buffer_manager {
           htod ? cudaMemcpyHostToDevice : cudaMemcpyDeviceToHost;
       if ( (is_input && engine.bindingIsInput(i)) ||
           (!is_input && !engine.bindingIsInput(i)) ) {
-        console->debug("Copy {} bytes from {} to {}", nbytes, src_ptr, dst_ptr); 
+        trt_log->debug("Copy {} bytes from {} to {}", nbytes, src_ptr, dst_ptr); 
         if (async) {
           cudaMemcpyAsync(dst_ptr, src_ptr, nbytes, cuda_memcpy_kind, stream);
         } else {
@@ -279,7 +279,7 @@ class buffer_manager {
       }
     }
   }
-  trt_shared_ptr<IExecutionContext> context;
+  IExecutionContext *context;
   const ICudaEngine& engine = context->getEngine();
   std::vector<blob> blobs;     // hold all input and output blobs
   std::vector<void*> gpu_bindings;  // device bindings for engine execution

@@ -20,6 +20,7 @@ using st::rpc::inference_rpc;
 using namespace st::sync;
 using namespace st::worker;
 using namespace st::ie;
+using namespace st::log;
 
 namespace st {
 namespace rpc {
@@ -34,8 +35,12 @@ class inference_rpc_impl final : public inference_rpc::Service {
       int sz = request->size();
       std::vector<bbox> prediction;
       obj_detection_msg<single_bell> m{data, sz, &prediction, bell};
+      rpc_log->debug("Enqueue my task, current queue size {}",
+              taskq->size());
       taskq->push(m);
+      rpc_log->debug("Waiting for inference engine");
       bell->wait(1);
+      rpc_log->debug("Recieved data");
       int n = prediction.size();
       for (int i = 0; i < n; ++i) {
         bbox& pred = prediction[i];
@@ -65,9 +70,8 @@ class rpc_listen_worker {
     // sync worker public interface implementation
     void operator()() {
       pthread_setname_np(pthread_self(), "rpc listener");
-      std::cout << "Warning: no IP and address is provide" << std::endl;
-      std::cout << "Use defaul address 0.0.0.0 and default port 8080"
-                << std::endl;
+      rpc_log->warn("No IP and address is provide");
+      rpc_log->warn("Use defaul address 0.0.0.0 and default port 8080");
       listen("0.0.0.0", "8080");
     }
     void operator()(std::string& ip, std::string& port) {
@@ -89,7 +93,7 @@ class rpc_listen_worker {
       builder.RegisterService(&service);
        // Finally assemble the server.
       std::unique_ptr<Server> server(builder.BuildAndStart());
-      std::cout << "Server listening on " << binding << std::endl;
+      rpc_log->info("Server listening on {}",binding);
 
       // Wait for the server to shutdown. Note that some other thread must be
       // responsible for shutting down the server for this call to ever return.

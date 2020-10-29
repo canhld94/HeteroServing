@@ -37,4 +37,4 @@ def simple_client(image, ip, port):
   im.save("testing.jpg","jpeg")
 
 if __name__ == '__main__':
-  simple_client(image=r'imgs/port.jpg', ip=r'localhost', port=8081)
+  simple_client(image=r'../imgs/AirbusDrone.jpg', ip=r'localhost', port=8081)

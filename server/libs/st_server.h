@@ -45,8 +45,8 @@ class http_server : public server {
       auto ip = config.get<std::string>("ip");
       auto port = config.get<std::string>("port");
       // inference engine
+      server_log->info("Creating inference engines");
       std::vector<inference_engine::ptr> IEs;
-
       const auto& ie_array = config.get_child("inference engines");
       ie_factory factory;
       // iterate over all devices
@@ -87,9 +87,11 @@ class http_server : public server {
           std::make_shared<object_detection_mq<single_bell>>();
 
       // listening worker
+      server_log->info("Spawning listener threads");
       sync_listen_worker listener{TaskQueue};
 
       // inference work group
+      server_log->info("Spawning inference engine threads");
       std::thread{std::bind(listener, ip, port)}.detach();
 
       // FPGA inference worker cannot run outside of main threads
@@ -125,7 +127,7 @@ class grpc_server : public server {
         auto port = config.get<std::string>("port");
         // inference engine
         std::vector<inference_engine::ptr> IEs;
-
+        server_log->info("Creating inference engines");
         const auto& ie_array = config.get_child("inference engines");
         ie_factory factory;
         // iterate over all devices
@@ -166,9 +168,11 @@ class grpc_server : public server {
             std::make_shared<object_detection_mq<single_bell>>();
 
         // listening worker
+        server_log->info("Spawning listener threads");
         rpc_listen_worker listener{TaskQueue};
 
         // inference work group
+        server_log->info("Spawning inference engine threads");
         std::thread{std::bind(listener, ip, port)}.detach();
 
         // FPGA inference worker cannot run outside of main threads
@@ -193,9 +197,10 @@ class grpc_server : public server {
 };
 
 inline server::server(const std::string& json_file) {
+  server_log->info("Loading server configuration from {}", json_file);
   JSON config;
   bpt::read_json(json_file, config);
-  std::cout << "Server configuration:" << std::endl;
+  server_log->info("Server configuration");
   bpt::write_json(std::cout, config);
   const std::string protocol = config.get<std::string>("protocol");
   if (protocol == "http") {

@@ -4,14 +4,13 @@
     "inference engines": [
       {
         "device": "cpu",
-        "models": [
-            {
-                "name": "ssd",
-                "graph": "/home/canhld/workplace/InferenceServer/openvino_models/dota/ssd608_mobilenet_v2_dota_fp32.xml",
-                "label": "/home/canhld/workplace/InferenceServer/openvino_models/dota/dota_ssd.txt",
-                "replicas": "5"
-            }
-        ]
+        "replicas": "5",
+        "models":
+        {
+            "name": "ssd",
+            "graph": "/home/canhld/workplace/InferenceServer/openvino_models/dota/ssd608_mobilenet_v2_dota_fp32.xml",
+            "label": "/home/canhld/workplace/InferenceServer/openvino_models/dota/dota_ssd.txt"
+        }
       },
       {
         "device": "gpu",

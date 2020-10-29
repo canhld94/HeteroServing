@@ -73,7 +73,7 @@ class sync_inference_worker : public sync_worker {
   sync_inference_worker(IEPtr& _Ie,
                         object_detection_mq<single_bell>::ptr& _taskq)
       : Ie(_Ie), taskq(_taskq) {
-    console->info("Init inference worker!");
+    ie_log->info("Init inference worker!");
   }
   /**
    * @brief Destroy the inference worker object
@@ -86,14 +86,14 @@ class sync_inference_worker : public sync_worker {
     // start listening to the queue
     try {
       for (;;) {
-        console->debug("[IEW] Waiting for new task");
+        ie_log->debug("Waiting for new task");
         auto m = taskq->pop();
-        console->debug("[IEW] Invoke inference engine {}", taskq->size());
+        ie_log->debug("Recieve task, invoke inference engine, remaining in queue {}", taskq->size());
         *m.predictions = Ie->run_detection(m.data, m.size);
-        console->debug("[IEW] Done inferencing, predidiction size = {}",
+        ie_log->debug("Done inferencing, predidiction size = {}",
                       m.predictions->size());
         // Push to queue and notify the sync_http_worker
-        console->debug("[IEW] signaling request thread");
+        ie_log->debug("Signaling request thread");
         m.bell->ring(1);
       }
     } catch (const std::exception& e) {
@@ -133,7 +133,7 @@ class sync_http_worker : public sync_worker {
         data(_data),
         taskq(_taskq) {
     bell = std::make_shared<single_bell>();
-    console->info("Init new http worker!");
+    http_log->info("Init new http worker!");
   }
   /**
    * @brief
@@ -272,15 +272,12 @@ class sync_http_worker : public sync_worker {
     // exception handling in run, no need to santiny check
     // push to queue
     obj_detection_msg<single_bell> m{data, size, &prediction, bell};
-    console->debug("[HTTPW {}] enqueue my task {}",
-                  boost::lexical_cast<std::string>(std::this_thread::get_id()),
+    http_log->debug("Enqueue my task, current queue size {}",
                   taskq->size());
     taskq->push(m);
-    console->debug("[HTTPW {}] waiting for IEW",
-                  boost::lexical_cast<std::string>(std::this_thread::get_id()));
+    http_log->debug("Waiting for inference engine");
     bell->wait(1);
-    console->debug("[HTTPW {}] recieved data",
-                  boost::lexical_cast<std::string>(std::this_thread::get_id()));
+    http_log->debug("Recieved data");
     int n = prediction.size();
     // create property tree and write to json
     JSON res;     // our response
@@ -403,11 +400,16 @@ class sync_http_worker : public sync_worker {
 
     // init sender, associate it with an error code that we can read later
     send_lambda<tcp::socket> sender{sock, close, ec};
+    std::chrono::time_point<std::chrono::system_clock> start;
+    std::chrono::time_point<std::chrono::system_clock> end;
 
     for (;;) {
       // read from socket
-      PROFILE_DEBUG("Read From Socket", beast_basic_request req;
-                    http::read(sock, buffer, req, ec););
+      start = std::chrono::system_clock::now();  // sync mode only
+      beast_basic_request req;
+      http::read(sock, buffer, req, ec);
+      end = std::chrono::system_clock::now(); 
+      std::chrono::duration<double, std::milli> elapsed_mil0 = end-start;
       // if read indicates end of stream, stop reading
       if (ec == http::error::end_of_stream) {
         break;
@@ -417,7 +419,12 @@ class sync_http_worker : public sync_worker {
         return fail(ec, "read");
       }
       // handle request
-      PROFILE_DEBUG("Handle Request", request_handler(std::move(req), sender););
+      start = std::chrono::system_clock::now();  // sync mode only
+      request_handler(std::move(req), sender);
+      end = std::chrono::system_clock::now(); 
+      std::chrono::duration<double, std::milli> elapsed_mil1 = end-start;
+      http_log->debug("Read from socket in {} ms, handle request in {} ms",
+                      elapsed_mil0.count(), elapsed_mil1.count());
       // handler write error report by sender
       if (ec) {
         return fail(ec, "write");
@@ -428,7 +435,7 @@ class sync_http_worker : public sync_worker {
     }
     // If we can reach here, the the request is successful
     // Shut down the socket and return
-    console->info("[HTTPW] Shutdown my socket!");
+    http_log->info("Shutdown my socket!");
     sock.shutdown(tcp::socket::shutdown_send, ec);
     return;
   }  // session_handler
@@ -486,15 +493,14 @@ class sync_listen_worker : public sync_worker {
     // the io_contex is required to all IO - boost asio implementation
     net::io_context ioc{1};  // we have only 1 listening thread in sync model
     // the acceptor that will recieve incomming request
-    std::cout << "Start accepting" << std::endl;
+    http_log->info("Start accepting");
     tcp::acceptor acceptor{ioc, {address, port}};
     for (;;) {
       // this socket will run
       tcp::socket sock{ioc};
       // accep, blocking until new connection
       acceptor.accept(sock);
-      std::cout << "New client: "
-                << sock.remote_endpoint().address().to_string() << std::endl;
+      http_log->info("New client: {}",sock.remote_endpoint().address().to_string());
       // launch new http worker to handle new request
       // transfer ownership of socket to the worker
       auto f = [&](tcp::socket& _sock) {

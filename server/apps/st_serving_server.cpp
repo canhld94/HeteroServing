@@ -66,13 +66,6 @@ int main(int argc, char const* argv[]) {
       return 0;
     }
     st::log::init_log();
-    std::cout << "Loading server configuration from " << FLAGS_f << std::endl;
-    if (!fs::exists(FLAGS_f)) {
-      std::cout << "WARNING: server configuration file is not exist or invalid"
-                << std::endl;
-      std::cout << "using default ../server/config/config.json" << std::endl;
-      FLAGS_f = "../server/config/config.json";
-    }
     st::server m_server(FLAGS_f);
     m_server.run();
   } catch (const std::exception& e) {

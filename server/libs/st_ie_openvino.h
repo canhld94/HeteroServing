@@ -16,9 +16,11 @@
 #include <inference_engine.hpp>
 #include <opencv2/opencv.hpp>
 #include "st_ie_base.h"
+#include "st_logging.h"
 
 // OpenVino Inference Engine
 using namespace InferenceEngine;
+using namespace st::log;
 
 namespace st {
 namespace ie {
@@ -93,28 +95,19 @@ class openvino_inference_engine : public inference_engine {
    */
   InferenceEngine::ExecutableNetwork exe_network;
   /**
-   * @brief Inference engine is the most important components in the system,
-   * so it will have
-   * a dedicated log
-   *
-   */
-  std::shared_ptr<spdlog::logger> log;
-  /**
    * @brief Initilize the device plugin
    *
    * @param device
    */
   void init_plugin(const std::string& device) {
-    log->info("Init new {} plugin", device);
-    std::cout << "Inference Engine version: " << GetInferenceEngineVersion()
-              << std::endl;
+    ovn_log->info("Init new {} plugin", device);
     // Loading Plugin
     plugin = PluginDispatcher().getPluginByDevice(device);
     // Adding CPU extension
     if (device.find("CPU") != std::string::npos) {  // has CPU, load extension
       plugin.AddExtension(std::make_shared<Extensions::Cpu::CpuExtensions>());
     }
-    log->info("Pluggin inited");
+    ovn_log->info("Pluggin inited");
     return;
   }
   /**
@@ -123,7 +116,7 @@ class openvino_inference_engine : public inference_engine {
    * @param model
    */
   void load_network(const std::string& model) {
-    log->info("Loading model from {}", model);
+    ovn_log->info("Loading model from {}", model);
     // Read the network
     CNNNetReader netReader;
     netReader.ReadNetwork(model);
@@ -133,7 +126,7 @@ class openvino_inference_engine : public inference_engine {
     bin += "bin";
     netReader.ReadWeights(bin);
     network = netReader.getNetwork();
-    log->info("Model loaded");
+    ovn_log->info("Model loaded");
   }
   /**
    * @brief Create an executable network from the logical netowrk
@@ -141,7 +134,7 @@ class openvino_inference_engine : public inference_engine {
    * @param extension
    */
   void load_plugin(std::map<std::string, std::string> extension) {
-    log->info("Creating new executable network");
+    ovn_log->info("Creating new executable network");
     std::chrono::time_point<std::chrono::system_clock> start;
     std::chrono::time_point<std::chrono::system_clock> end;
     std::chrono::duration<double, std::milli> elapsed_mil;
@@ -154,7 +147,7 @@ class openvino_inference_engine : public inference_engine {
     }
     end = std::chrono::system_clock::now();
     elapsed_mil = end - start;
-    log->info("Creating new executable network in {} ms", elapsed_mil.count());
+    ovn_log->info("Creating new executable network in {} ms", elapsed_mil.count());
   }
   /**
    * @brief Perform sanity check for a network
@@ -206,7 +199,7 @@ class openvino_inference_engine : public inference_engine {
       const int height = frame.size().height;
       end = std::chrono::system_clock::now();
       elapsed_mil = end - start;
-      log->debug("Decode image in {} ms", elapsed_mil.count());
+      ovn_log->debug("Decode image in {} ms", elapsed_mil.count());
 
       // create new request
       start = std::chrono::system_clock::now();
@@ -227,13 +220,12 @@ class openvino_inference_engine : public inference_engine {
         auto input = it->second;
         if (input->getTensorDesc().getDims().size() == 4) {
           frameToBlob(frame, infer_request, name);
-        } else if (input->getTensorDesc().getDims().size() == 2) {
+        } else if (input->getTensorDesc().getDims().size() == 2) { // faster rcnn
           Blob::Ptr input2 = infer_request->GetBlob(name);
           float* p = input2->buffer()
                          .as<PrecisionTrait<Precision::FP32>::value_type*>();
           assert(input_width > 0);
           assert(input_height > 0);
-          std::cout << input_width << " " << input_height << std::endl;
           p[0] = static_cast<float>(input_width);
           p[1] = static_cast<float>(input_height);
         }
@@ -242,7 +234,7 @@ class openvino_inference_engine : public inference_engine {
       infer_request->Infer();
       end = std::chrono::system_clock::now();  // sync mode only
       elapsed_mil = end - start;
-      log->debug("Create and do inference request in {} ms",
+      ovn_log->debug("Create and do inference request in {} ms",
                  elapsed_mil.count());
       return {infer_request, width, height};
     } catch (const cv::Exception& e) {
@@ -277,13 +269,6 @@ class openvino_ssd : public openvino_inference_engine {
    */
   openvino_ssd(const std::string& device, const std::string& model,
                const std::string& label) {
-    std::ostringstream ss;
-    ss << "IELog" << rand();
-    std::string log_name = ss.str();
-    std::cout << log_name << std::endl;
-    log = spdlog::basic_logger_mt(log_name.c_str(), "logs/IE.txt");
-    log->set_pattern("[%H:%M:%S %z] [%n] [%^---%L---%$] [thread %t] %v");
-    log->info("Log started!");
     init_plugin(device);
     load_network(model);
     init_IO(Precision::U8, Layout::NCHW);
@@ -294,11 +279,12 @@ class openvino_ssd : public openvino_inference_engine {
   std::vector<bbox> detection_parser(network_output& net_out) final {
     std::vector<bbox> ret = {};  // return value
     try {
+      ovn_log->debug("Parsing ssd output");
       std::chrono::time_point<std::chrono::system_clock> start;
       std::chrono::time_point<std::chrono::system_clock> end;
       std::chrono::duration<double, std::milli> elapsed_mil;
       start = std::chrono::system_clock::now();
-      auto infer_request = net_out.infer_request;
+      auto &infer_request = net_out.infer_request;
       auto width = net_out.width;
       auto height = net_out.height;
       auto outputInfo = OutputsDataMap(network.getOutputsInfo());
@@ -309,6 +295,7 @@ class openvino_ssd : public openvino_inference_engine {
       auto dims = blob->dims();
       const int maxProposalCount = dims[1];
       const int objectSize = dims[0];
+      ovn_log->trace("TopK {}, object size {}", maxProposalCount, objectSize);
       for (int i = 0; i < maxProposalCount; i++) {
         float image_id = detections[i * objectSize + 0];
         if (image_id < 0) {
@@ -316,17 +303,19 @@ class openvino_ssd : public openvino_inference_engine {
         }
         float confidence = detections[i * objectSize + 2];
         auto label_id = static_cast<int>(detections[i * objectSize + 1]);
+        if (label_id <= 0) break;
         int xmin = detections[i * objectSize + 3] * width;
         int ymin = detections[i * objectSize + 4] * height;
         int xmax = detections[i * objectSize + 5] * width;
         int ymax = detections[i * objectSize + 6] * height;
+        ovn_log->trace("{} {} {} {} {} {} {} {}", i, image_id, label_id, confidence, xmin, ymin, xmax, ymax);
         auto label = labels[label_id - 1];
-
+        ovn_log->trace("Object: {}", label);
         if (confidence > 0.45) {
           bbox d;
           d.prop = confidence;
           d.label_id = label_id;
-          d.label = label;
+          d.label = std::move(label);
           d.c[0] = xmin;
           d.c[1] = ymin;
           d.c[2] = xmax;
@@ -336,7 +325,7 @@ class openvino_ssd : public openvino_inference_engine {
       }
       end = std::chrono::system_clock::now();  // sync mode only
       elapsed_mil = end - start;
-      log->debug("Parsing network output in {} ms", elapsed_mil.count());
+      ovn_log->debug("Parsing network output in {} ms", elapsed_mil.count());
       return ret;
     } catch (const cv::Exception& e) {
       std::cerr << "Error: " << e.what() << std::endl;
@@ -387,13 +376,6 @@ class openvino_yolo : public openvino_inference_engine {
    */
   openvino_yolo(const std::string& device, const std::string& model,
                 const std::string& label) {
-    std::ostringstream ss;
-    ss << "IELog" << rand();
-    std::string log_name = ss.str();
-    std::cout << log_name << std::endl;
-    log = spdlog::basic_logger_mt(log_name.c_str(), "logs/IE.txt");
-    log->set_pattern("[%H:%M:%S %z] [%n] [%^---%L---%$] [thread %t] %v");
-    log->info("Log started!");
     init_plugin(device);
     load_network(model);
     init_IO(Precision::U8, Layout::NCHW);
@@ -455,7 +437,7 @@ class openvino_yolo : public openvino_inference_engine {
       }
       end = std::chrono::system_clock::now();  // sync mode only
       elapsed_mil = end - start;
-      log->debug("Parsing network output in {} ms", elapsed_mil.count());
+      ovn_log->debug("Parsing network output in {} ms", elapsed_mil.count());
       return ret;
     } catch (const cv::Exception& e) {
       std::cerr << e.what() << '\n';
@@ -650,13 +632,6 @@ class openvino_frcnn : public openvino_inference_engine {
    */
   openvino_frcnn(const std::string& device, const std::string& model,
                  const std::string& label) {
-    std::ostringstream ss;
-    ss << "IELog" << rand();
-    std::string log_name = ss.str();
-    std::cout << log_name << std::endl;
-    log = spdlog::basic_logger_mt(log_name.c_str(), "logs/IE.txt");
-    log->set_pattern("[%H:%M:%S %z] [%n] [%^---%L---%$] [thread %t] %v");
-    log->info("Log started!");
     init_plugin(device);
     load_network(model);
     init_IO(Precision::U8, Layout::NCHW);
@@ -710,7 +685,7 @@ class openvino_frcnn : public openvino_inference_engine {
       }
       end = std::chrono::system_clock::now();  // sync mode only
       elapsed_mil = end - start;
-      log->debug("Parsing network output in {} ms", elapsed_mil.count());
+      ovn_log->debug("Parsing network output in {} ms", elapsed_mil.count());
       return ret;
     } catch (const cv::Exception& e) {
       std::cerr << "Error: " << e.what() << std::endl;
