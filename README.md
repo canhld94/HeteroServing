@@ -132,7 +132,7 @@ Every binary file, include conan package binaries will be installed in the `bin`
 
 ## How to run the server
 
-1. Understand the [server architecture]()
+1. Understand the [server architecture](docs/dev/server.md)
 
 2. Configure your [server file](server/config/README.md)
 
