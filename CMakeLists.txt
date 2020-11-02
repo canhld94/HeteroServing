@@ -36,14 +36,14 @@ set (LIBRARY_OUTPUT_DIRECTORY ${PROJECT_DIR}/${BIN_FOLDER}/${CMAKE_BUILD_TYPE}/l
 set (LIBRARY_OUTPUT_PATH ${LIBRARY_OUTPUT_DIRECTORY}/lib)
 
 
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-error=deprecated-declarations -Wno-error=array-bounds") #treating warnings as errors
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-deprecated-declarations -Wno-array-bounds") #treating warnings as errors
 
 ###################################### to use C++11
 set (CMAKE_CXX_STANDARD 11)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 if (CMAKE_CXX_COMPILER_ID STREQUAL GNU)
-    if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.8)
-        message(FATAL_ERROR "GCC version must be at least 4.8!")
+    if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 5.0)
+        message(FATAL_ERROR "GCC version must be at least 5.0!")
     endif()
     set (CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
 endif()
@@ -57,6 +57,7 @@ endif()
 # OpenCV and Inference Engine come with openvino
 if (INTEL_OPENVINO_DIR STREQUAL "")
     set(INTEL_OPENVINO_DIR $ENV{INTEL_OPENVINO_DIR})
+    # message(STATUS "Looking for inference engine and opencv in ${INTEL_OPENVINO_DIR}")
 endif()
 if (NOT INTEL_OPENVINO_DIR STREQUAL "")
     message(STATUS "Looking for inference engine and opencv in ${INTEL_OPENVINO_DIR}")
@@ -75,6 +76,7 @@ endif()
 find_package(CUDA REQUIRED)
 # TensorRT
 if (TensorRT_ROOT STREQUAL "")
+    message(STATUS "Getting tensorrt from evironment variable")
     set(TensorRT_ROOT $ENV{TensorRT_ROOT})
 endif()
 if (NOT TensorRT_ROOT STREQUAL "")
@@ -82,8 +84,6 @@ if (NOT TensorRT_ROOT STREQUAL "")
     list(APPEND CMAKE_PREFIX_PATH ${TensorRT_ROOT})
 endif()
 find_package(TensorRT REQUIRED)
-
-# clone all submodules
 
 # GRPC & protobuf
 set(Protobuf_MODULE_COMPATIBLE TRUE)
@@ -96,7 +96,8 @@ message(STATUS "Using gRPC ${gRPC_VERSION}")
 set(_REFLECTION gRPC::grpc++_reflection)
 set(_GRPC_GRPCPP gRPC::grpc++)
 
-# Other libraries: boost, gflags, gtest, spdlog is managed by conan
+# Other libraries: boost, gflags, spdlog is managed by conan
+message(STATUS "Install libraries with CONAN")
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup()
 

@@ -29,42 +29,46 @@ using namespace nvonnxparser;
 namespace st {
 namespace ie {
 
+// Default logger for tensorrt
 class trtlogger glogger;
 
-
+/**
+ * @brief tensorrt inference engine
+ * 
+ */
 class tensorrt_inference_engine : public inference_engine {
- public:
-  /*****************************************************/
-  /*  Implement of inference engine public interface   */
-  /*****************************************************/
+public:
+  /**********************************************************/
+  /*       Implement of inference engine public interface   */
+  /**********************************************************/
+
   std::vector<bbox> run_detection(const char* data, int size) final {
     auto iobuf = do_infer(data,size);
     return detection_parser(std::move(iobuf));
   }
 
-  std::vector<int> run_classification(const char* data, int size) final {
-    return {};
-  }
-
+  /**
+   * @brief Parse the output detection network
+   * 
+   * @param iobuf 
+   * @return std::vector<bbox> 
+   */
   virtual std::vector<bbox> detection_parser(
-      std::unique_ptr<buffer_manager>&& iobuf) {
-    return {};
-  }
-
-  virtual std::vector<int> classification_parser(
       std::unique_ptr<buffer_manager>&& iobuf) {
     return {};
   }
 
   using ptr = std::shared_ptr<tensorrt_inference_engine>;
 
- protected:
+protected:
   trt_shared_ptr<ICudaEngine> engine; // static
   trt_unique_ptr<IExecutionContext> context;
-  // unique_ptr
-  // --> pass to function --> always move
-  // --> return from function --> not neccessary if copy elision is possible
 
+  /**
+   * @brief Build the engine from serialized model
+   * 
+   * @param serialized_model 
+   */
   virtual void build_engine(std::string serialized_model) {
     // create builder
     auto runtime = createInferRuntime(glogger);
@@ -87,55 +91,73 @@ class tensorrt_inference_engine : public inference_engine {
     }
   }
 
+  /**
+   * @brief Do the inference with the cuda engine
+   * 
+   * @param data JPEG data buffer
+   * @param size Size of the buffer
+   * @return std::unique_ptr<buffer_manager> The buffer mng that hold the 
+   * I/O buffer after running inference
+   */
   virtual std::unique_ptr<buffer_manager> do_infer(const char* data, int size) {
-    // create execution context with memory allocation for all
-    // activations (laten features)
-    assert(context);
-    std::chrono::time_point<std::chrono::system_clock> start;
-    std::chrono::time_point<std::chrono::system_clock> end;
-    std::chrono::duration<double, std::milli> elapsed_mil;
+    try {
+      // create execution context with memory allocation for all
+      // activations (laten features)
+      assert(context);
+      std::chrono::time_point<std::chrono::system_clock> start;
+      std::chrono::time_point<std::chrono::system_clock> end;
+      std::chrono::duration<double, std::milli> elapsed_mil;
 
-    start = std::chrono::system_clock::now();
-    cv::Mat frame =
-        cv::imdecode(cv::Mat(1, size, CV_8UC3, (unsigned char*)data),
-                      cv::IMREAD_UNCHANGED);
-    const int width = frame.size().width;
-    const int height = frame.size().height;
-    end = std::chrono::system_clock::now();
-    elapsed_mil = end - start;
-    trt_log->debug("Decode image in {} ms", elapsed_mil.count());
-    // prepare input and output buffer, just like in ovn
-    // but here we need to handle it ourself, i.e. allocate and dealocate the
-    // input and output blob memory --> RAII buffer
-    start = std::chrono::system_clock::now();
-    std::unique_ptr<buffer_manager> iobuf{new buffer_manager(context.get())};
-    end = std::chrono::system_clock::now();
-    elapsed_mil = end - start;
-    trt_log->debug("Create IO buffer in {} ms", elapsed_mil.count());
-    // fill blob and do inference
-    start = std::chrono::system_clock::now();
-    for (int ix = 0; ix < engine->getNbBindings(); ++ix) {
-      if (engine->bindingIsInput(ix)) {
-        iobuf->fill_input(ix, frame);
+      start = std::chrono::system_clock::now();
+      cv::Mat frame =
+          cv::imdecode(cv::Mat(1, size, CV_8UC3, (unsigned char*)data),
+                        cv::IMREAD_UNCHANGED);
+      const int width = frame.size().width;
+      const int height = frame.size().height;
+      end = std::chrono::system_clock::now();
+      elapsed_mil = end - start;
+      trt_log->debug("Decode image in {} ms", elapsed_mil.count());
+      // prepare input and output buffer, just like in ovn
+      // but here we need to handle it ourself, i.e. allocate and dealocate the
+      // input and output blob memory --> RAII buffer
+      start = std::chrono::system_clock::now();
+      std::unique_ptr<buffer_manager> iobuf{new buffer_manager(context.get())};
+      end = std::chrono::system_clock::now();
+      elapsed_mil = end - start;
+      trt_log->debug("Create IO buffer in {} ms", elapsed_mil.count());
+      // fill blob and do inference
+      start = std::chrono::system_clock::now();
+      for (int ix = 0; ix < engine->getNbBindings(); ++ix) {
+        if (engine->bindingIsInput(ix)) {
+          iobuf->fill_input(ix, frame);
+        }
       }
+      iobuf->set_im_size(width, height);
+      iobuf->memcpy_input_htod();
+      auto bindings = iobuf->get_bindings();
+      context->execute(1,bindings.data());
+      iobuf->memcpy_output_dtoh();
+      end = std::chrono::system_clock::now();  // sync mode only
+      elapsed_mil = end - start;
+      trt_log->debug("Do inference request in {} ms",
+                  elapsed_mil.count());
+      // should be able to get the output of network from this request
+      // may be we should return a buffer? --> yes
+      return iobuf;
     }
-    iobuf->set_im_size(width, height);
-    iobuf->memcpy_input_htod();
-    auto bindings = iobuf->get_bindings();
-    context->execute(1,bindings.data());
-    iobuf->memcpy_output_dtoh();
-    end = std::chrono::system_clock::now();  // sync mode only
-    elapsed_mil = end - start;
-    trt_log->debug("Do inference request in {} ms",
-                elapsed_mil.count());
-    // should be able to get the output of network from this request
-    // may be we should return a buffer? --> yes
-    return iobuf;
+    catch(const cv::Exception& e) {
+      std::cerr << "Error: " << e.what() << std::endl;
+      return {};
+    }
   }
 };
 
+/**
+ * @brief Tensorrt SSD implementation
+ * 
+ */
 class tensorrt_ssd : public tensorrt_inference_engine {
-  public:
+public:
   tensorrt_ssd(const std::string &serialized_model, const std::string &label) {
     // parser with models here
     build_engine(serialized_model);

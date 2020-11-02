@@ -2,8 +2,7 @@
  * Copyright (C) 2020 canhld@.kaist.ac.kr
  * SPDX-License-Identifier: Apache-2.0
  * @b About: collections of useful marco and template that I find useful but not
- *closely related
- * to the project
+ * closely related to the project
  ***************************************************************************************/
 
 #pragma once

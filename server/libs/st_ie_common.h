@@ -1,4 +1,8 @@
-
+/***************************************************************************************
+ * Copyright (C) 2020 canhld@.kaist.ac.kr
+ * SPDX-License-Identifier: Apache-2.0
+ * @b About: This file implement RAII buffers when runing tensorrt inference engine
+ ***************************************************************************************/
 
 #pragma once
 
@@ -37,15 +41,6 @@ using obj_detection_msg =
     st::sync::message<const char*, int, std::vector<bbox>*, simple_bell>;
 
 /**
- * @brief Message template that can old classification result
- *
- * @tparam simple_bell
- */
-template <class simple_bell>
-using classification_msg =
-     st::sync::message<const char*, int, std::vector<int>*, simple_bell>;
-
-/**
  * @brief Object detection message queue that can be used to exchange object
  * detection message
  *
@@ -53,15 +48,6 @@ using classification_msg =
  */
 template <class simple_bell>
 using object_detection_mq =  st::sync::blocking_queue<obj_detection_msg<simple_bell>>;
-
-/**
- * @brief Classification message queue than can be used to exchange the
- * classification message
- *
- * @tparam simple_bell
- */
-template <class simple_bell>
-using classification_mq =  st::sync::blocking_queue<classification_msg<simple_bell>>;
 
 /**
 * @brief Sets image data stored in cv::Mat object to a given Blob object.
@@ -97,7 +83,7 @@ void matU8ToBlob(const cv::Mat& orig_image, Blob::Ptr& blob,
   }
 }
 /**
- * @brief Map opencv map to blob
+ * @brief Map opencv map to openvino blob
  *
  * @param frame
  * @param inferRequest
@@ -130,18 +116,11 @@ class trtlogger : public ILogger {
   }
 };
 /**
- * @brief Dealocator to tensorRT objects
- *
+ * @brief return size of type corresponding to tensorrt type
+ * 
+ * @param Tp 
+ * @return int 
  */
-struct trt_object_deleter {
-  template <typename T>
-  void operator()(T* obj) const {
-    if (obj) {
-      obj->destroy();
-    }
-  }
-};
-
 int trt_type_size(DataType Tp) {
   switch (Tp) {
     case DataType::kFLOAT:
@@ -165,6 +144,21 @@ int trt_type_size(DataType Tp) {
   }
   return 0;
 }
+
+/**
+ * @brief Dealocator to tensorRT objects
+ *
+ */
+struct trt_object_deleter {
+  template <typename T>
+  void operator()(T* obj) const {
+    if (obj) {
+      obj->destroy();
+    }
+  }
+};
+
+// Smart pointer for tensorrt object
 
 template <class T>
 using trt_unique_ptr = std::unique_ptr<T, trt_object_deleter>;

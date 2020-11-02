@@ -1,4 +1,8 @@
-
+/***************************************************************************************
+ * Copyright (C) 2020 canhld@.kaist.ac.kr
+ * SPDX-License-Identifier: Apache-2.0
+ * @b About: This file implement RAII buffers when runing tensorrt inference engine
+ ***************************************************************************************/
 
 #pragma once
 
@@ -20,13 +24,14 @@ using namespace st::log;
 namespace st {
 namespace ie {
 /**
-* @brief RAII generic buffer
+* @brief RAII generic buffer -> auto dealloc when go out of scope
 *
 */
 class generic_buffer {
- public:
+public:
   generic_buffer() : data(nullptr), size(0), nbytes(0){};
   virtual ~generic_buffer(){};
+  // buffer should only have move constructor, not copy constructor
   generic_buffer(generic_buffer&& other)
       : data(other.data), size(other.size), nbytes(other.nbytes) {
     other.data = nullptr;
@@ -46,17 +51,19 @@ class generic_buffer {
   }
   void* get_data() const { return data; }
   const void* get_const_data() const { return data; }
-  size_t get_size() { return size; }
-  size_t get_nbytes() { return nbytes; }
+  size_t get_size() const { return size; }
+  size_t get_nbytes() const { return nbytes; }
+  // this function should be override for each data type
   virtual void fill_from_mat(cv::Mat& orig_image, Dims& dim, int batch_id) {};
   using ptr = std::unique_ptr<generic_buffer>;
 
- protected:
+protected:
   void* data;
   size_t size;
   size_t nbytes;
 };
 
+// Allocator for host memory
 struct host_allocator {
   bool operator()(void** data, size_t size) {
     trt_log->trace("Allocate {} bytes on host", size);
@@ -67,6 +74,8 @@ struct host_allocator {
 struct host_deleter {
   void operator()(void* data) { free(data); }
 };
+
+// Allocator for device memory
 struct gpu_allocator {
   bool operator()(void** data, size_t size) { 
     trt_log->trace("Allocate {} bytes on device", size);
@@ -81,11 +90,12 @@ struct gpu_deleter {
 /**
 * @brief RAII generic buffer implementation
 * @tparam Allocator
-* @tparam Deleter
+* @tparam Deleter 
+* @tparam T type of the wrapped pointer
 */
 template <class Allocator, class Deleter, typename T>
 class flat_buffer : public generic_buffer {
- public:
+public:
   using value_type = T;
   flat_buffer() { generic_buffer(); }
   flat_buffer(size_t _size) : generic_buffer() {
@@ -98,7 +108,7 @@ class flat_buffer : public generic_buffer {
     // debug
     trt_log->trace("Free allocated memory");
     free_fn(data); 
-    }
+  }
   void fill_from_mat(cv::Mat& orig_image, Dims& dim,
                      int batch_id) override {
     assert(data != nullptr);
@@ -117,7 +127,7 @@ class flat_buffer : public generic_buffer {
         static_cast<int>(width) != orig_image.size().width) {
       cv::resize(orig_image, resized_image, cv::Size(width, height));
     }
-    // 3 channel, nchw
+    // 3 channel, nhwc
     // fill the buffer in order C->H->W
     size_t batch_offset = batch_id * channels * height * width;
     auto typed_data = (value_type*) data;
@@ -130,7 +140,7 @@ class flat_buffer : public generic_buffer {
         }
       }
     }
-    // std::cout << "Filled buffer with data" << std::endl;
+    trt_log->debug("Fill buffer with data");
     return;
   }
 
@@ -144,13 +154,18 @@ using host_buffer = flat_buffer<host_allocator, host_deleter, T>;
 template <typename T>
 using gpu_buffer = flat_buffer<gpu_allocator, gpu_deleter, T>;
 
+/**
+ * @brief Factory for create buffer - abstract factory dp
+ * 
+ */
 class buffer_factory {
- public:
+public:
   virtual generic_buffer* create_buffer_ptr(DataType Tp, size_t size) = 0;
 };
 
+// cpu buffer factory 
 class host_buffer_factory : public buffer_factory {
- public:
+public:
   generic_buffer* create_buffer_ptr(DataType Tp, size_t size) override {
     switch (Tp) {
       case (DataType::kFLOAT):
@@ -168,6 +183,7 @@ class host_buffer_factory : public buffer_factory {
   }
 };
 
+// gpu buffer factory
 class gpu_buffer_factory : public buffer_factory {
   generic_buffer* create_buffer_ptr(DataType Tp, size_t size) override {
     switch (Tp) {
@@ -188,7 +204,7 @@ class gpu_buffer_factory : public buffer_factory {
 
 /**
 * @brief TensorRT IO blob
-* @details every IO blob in trt have two buffer: buffer on host
+* @details every IO placeholder in trt have two buffer: buffer on host
 * and buffer on gpu
 *
 */
@@ -201,11 +217,11 @@ struct blob {
 };
 
 /**
-* @brief manage the input and output buffer of the network
+* @brief manage the input and output buffers of the network
 * @details this is quite similar to blob object in openvino
 */
 class buffer_manager {
- public:
+public:
   buffer_manager(IExecutionContext* _context)
       : context(_context) {
     std::unique_ptr<buffer_factory> host_factory{new host_buffer_factory};
@@ -216,10 +232,9 @@ class buffer_manager {
     for (int i = 0; i < k; ++i) {
       // get type of bindings and binding names
       auto dtype = engine.getBindingDataType(i);
-      assert(dtype == DataType::kFLOAT);
       // auto name = engine.getBindingName(i);
       trt_log->debug("Binding name: {}", engine.getBindingName(i));
-      // calcuate the size of bindings
+      // calculate the size of bindings
       size_t vol = 1;
       auto dims = context->getBindingDimensions(i);
       for (int i = 0; i < dims.nbDims; ++i) {
@@ -231,7 +246,7 @@ class buffer_manager {
       gpu_bindings.push_back(gpu_ptr->get_data());
     }
   }
-  // get an input blob by name and fill data
+  // get an input blob by index and fill data
   void fill_input(int index, cv::Mat& img) {
     Dims dim = context->getBindingDimensions(index);
     blobs[index].host_mem->fill_from_mat(img, dim, 0);  // currently support batch 1
@@ -244,7 +259,7 @@ class buffer_manager {
   std::vector<void*> get_bindings() const {
     return gpu_bindings; 
   }
-  // get the buffer associcate to tensorname
+  // get the buffer associate to tensorname
   void* get_buffer(const bool is_host, int index) const {
     return is_host ? blobs[index].host_mem->get_data()
                    : blobs[index].gpu_mem->get_data();
@@ -253,10 +268,10 @@ class buffer_manager {
     im_width = width;
     im_height = height;
   }
-  std::pair<int,int> get_im_size() {
+  std::pair<int,int> get_im_size() const {
     return {im_width, im_height};
   }
- private:
+private:
   // copy data from host to device and device to host
   void memcpy_buffer(const bool is_input, const bool htod, const bool async,
                      const cudaStream_t& stream = 0) {
@@ -281,7 +296,7 @@ class buffer_manager {
   }
   IExecutionContext *context;
   const ICudaEngine& engine = context->getEngine();
-  std::vector<blob> blobs;     // hold all input and output blobs
+  std::vector<blob> blobs;          // hold all input and output blobs
   std::vector<void*> gpu_bindings;  // device bindings for engine execution
   int im_width;
   int im_height;

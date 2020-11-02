@@ -91,6 +91,10 @@ class inference_engine_creator {
   virtual inference_engine::ptr create(JSON& conf) = 0;
 };
 
+/**
+ * @brief Creator for intel cpu
+ * 
+ */
 class intel_cpu_inference_engine_creator : public inference_engine_creator {
  public:
   inference_engine::ptr create(JSON& conf) final {
@@ -103,7 +107,10 @@ class intel_cpu_inference_engine_creator : public inference_engine_creator {
     return create_openvino_engine(plugin, name, graph, label);
   }
 };
-
+/**
+ * @brief Creator for intel fpga
+ * 
+ */
 class intel_fpga_inference_engine_creator : public inference_engine_creator {
  public:
   inference_engine::ptr create(JSON& conf) final {
@@ -116,7 +123,10 @@ class intel_fpga_inference_engine_creator : public inference_engine_creator {
     return create_openvino_engine(plugin, name, graph, label);
   }
 };
-
+/**
+ * @brief Creator for nvidia gpu 
+ * 
+ */
 class nvidia_gpu_inference_engine_creator : public inference_engine_creator {
  public:
   inference_engine::ptr create(JSON& conf) final {
@@ -128,8 +138,11 @@ class nvidia_gpu_inference_engine_creator : public inference_engine_creator {
     return create_tensorrt_engine(name, graph, label);
   }
 };
-
-class xilinx_gpu_inference_engine_creator : public inference_engine_creator {
+/**
+ * @brief creator for xilinx device
+ * 
+ */
+class xilinx_fpga_inference_engine_creator : public inference_engine_creator {
  public:
   inference_engine::ptr create(JSON& conf) final {
     throw std::logic_error("Xilinx FPGA inference engine has not yet implemented");
@@ -152,10 +165,7 @@ class ie_factory {
   /**
    * @brief Create a inference engine object
    *
-   * @param model_name
-   * @param device_name
-   * @param model
-   * @param label
+   * @param conf JSON object that hold parameter to create the inference engine
    * @return inference_engine::ptr
    */
   inference_engine::ptr create_inference_engine(JSON& conf) {
@@ -168,7 +178,12 @@ class ie_factory {
     auto creator = it->second;
     return creator->create(conf);
   }
-
+  /**
+   * @brief Registor a device with a creator, should be done at compile time by now
+   * 
+   * @param device 
+   * @param creator 
+   */
   void Register(std::string device, inference_engine_creator* creator) {
     auto &registry = get_registry();
     auto it = registry.find(device);

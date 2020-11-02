@@ -15,10 +15,9 @@ target_link_libraries(serving
                         ${InferenceEngine_LIBRARIES}
                         ${CUDA_LIBRARIES}
                         ${TensorRT_LIBRARIES}
-                        ${gRPC_LIBRARIES}
+                        ${_PROTOBUF_LIBPROTOBUF}
                         ${_REFLECTION}
-                        ${_GRPC_GRPCPP}
-                        ${_PROTOBUF_LIBPROTOBUF})
+                        ${_GRPC_GRPCPP})
 
 install(TARGETS serving
         RUNTIME DESTINATION bin

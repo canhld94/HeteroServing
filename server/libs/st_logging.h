@@ -1,3 +1,8 @@
+/***************************************************************************************
+ * Copyright (C) 2020 canhld@.kaist.ac.kr
+ * SPDX-License-Identifier: Apache-2.0
+ * @b About: This file define the log objects for the whole system
+ ***************************************************************************************/
 
 #pragma once
 
@@ -17,7 +22,7 @@ namespace log {
   static std::shared_ptr<spdlog::logger> rpc_log = spdlog::stdout_color_mt("grpc");
   static std::shared_ptr<spdlog::logger> ie_log = spdlog::stdout_color_mt("ie");
   // file syslog for deploy
-  static std::shared_ptr<spdlog::logger> file_log = spdlog::basic_logger_mt("server_log", "logs/logs.txt");
+  static std::shared_ptr<spdlog::logger> file_log = spdlog::basic_logger_mt("file_log", "logs/logs.txt");
 
   void init_log() {
     #ifdef NDEBUG
@@ -27,8 +32,8 @@ namespace log {
     #endif
     spdlog::set_pattern("[%H:%M:%S] [tid %t] [%n] [%l] %v");
   }
-}
-}
+} // namespace log
+} // namespace st
 
 
 

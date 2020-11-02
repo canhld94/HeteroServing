@@ -5,7 +5,6 @@
  ***************************************************************************************/
 
 #pragma once
-#include <boost/lexical_cast.hpp>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -30,7 +29,7 @@ using namespace st::ie;
  * @brief pure abstract worker thread
 */
 class sync_worker {
- public:
+public:
   /**
    * @brief Construct a new worker object
    *
@@ -59,7 +58,7 @@ class sync_worker {
  */
 template <class IEPtr>
 class sync_inference_worker : public sync_worker {
- public:
+public:
   sync_inference_worker() = delete;
   /**
    * @brief Construct a new inference worker object
@@ -101,7 +100,7 @@ class sync_inference_worker : public sync_worker {
     }
   }
 
- private:
+private:
   IEPtr Ie;  //!< pointer to inference engine
   object_detection_mq<single_bell>::ptr
       taskq;  //!< task queue, will get job in this queue
@@ -115,7 +114,7 @@ class sync_inference_worker : public sync_worker {
  *
  */
 class sync_http_worker : public sync_worker {
- public:
+public:
   sync_http_worker() = delete;
 
   /**
@@ -147,7 +146,7 @@ class sync_http_worker : public sync_worker {
     session_handler();
   }
 
- private:
+private:
   // private attribute
   tcp::acceptor& acceptor;  //!< the acceptor, needed to init our socket
   tcp::socket sock{
@@ -179,15 +178,15 @@ class sync_http_worker : public sync_worker {
     res.prepare_payload();
     return res;
   }  // error_message
-     /**
-     * @brief This function resolve the request target to route it to proper
-     * resource.
-     *
-     * @param target
-     * @param ec
-     * @return std::string
-     * @exception raise ec::no_such_file if the resource doesn't exist
-     */
+  /**
+ * @brief This function resolve the request target to route it to proper
+ * resource.
+ *
+ * @param target
+ * @param ec
+ * @return std::string
+ * @exception raise ec::no_such_file if the resource doesn't exist
+ */
   std::string request_resolve(beast::string_view const& target,
                               beast::error_code& ec) {
     // Now do it as simple as possible
@@ -247,11 +246,11 @@ class sync_http_worker : public sync_worker {
        << "}\n";
     return ss.str();
   }  // metadata_request_handler
-     /**
-      * @brief This funtion handles the inference request at POST /inference
-      * ?All request return string body, so its return type is std::string should
-      * we format it with JSON?
-      */
+  /**
+  * @brief This funtion handles the inference request at POST /inference
+  * ?All request return string body, so its return type is std::string should
+  * we format it with JSON?
+  */
   std::string inference_request_handler(beast_basic_request& req) {
     // we know this is the post method
     // now, first extact the content-type
@@ -303,13 +302,13 @@ class sync_http_worker : public sync_worker {
     bpt::write_json(ss, res);
     return ss.str();
   }  // inferennce_request_handler
-     /**
-      * @brief this is our handler
-      *
-      * @param req
-      * @param sender
-      * @return * Request
-      */
+  /**
+  * @brief this is our handler
+  *
+  * @param req
+  * @param sender
+  * @return * Request
+  */
   template <class Send>
   void request_handler(beast_basic_request&& req, Send& sender) {
     // Make sure we can handle the method
@@ -386,11 +385,11 @@ class sync_http_worker : public sync_worker {
       sender(std::move(res));
     }
   }  // request_handler
-     /**
-      * @brief handler the session
-      *
-      * @return * Session
-      */
+  /**
+  * @brief handler the session
+  *
+  * @return * Session
+  */
   void session_handler() {
     bool close = false;
     beast::error_code ec;
@@ -479,7 +478,7 @@ class sync_listen_worker : public sync_worker {
     listen(ip.c_str(), port.c_str());
   }
 
- private:
+private:
   object_detection_mq<single_bell>::ptr taskq;  //!< task queue
                                                 /**
                                                  * @brief

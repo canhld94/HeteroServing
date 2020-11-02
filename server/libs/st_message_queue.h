@@ -18,11 +18,9 @@ namespace sync {
 /**
  * @brief Simple bell using in queue theorem.
  * @details In producer-consumer model with event-loop, producer will pass job
- * to consumer,
- * then block and wait for the data. Consumer will process the request and
- * notify the producer
- * once it's data is ready. Bell is the effective mechanism to implement this
- * strategy
+ * to consumer, then block and wait for the data. Consumer will process the 
+ * request and notify the producer once it's data is ready. Bell is the effective 
+ * mechanism to implement this strategy
  * @tparam CondVar condition variable type
  * @tparam Mutex mutex type
  * @tparam Key key type
@@ -37,7 +35,7 @@ class simple_bell {
  private:
   CondVar cv;             //!< Conditional variable that producer will wait for
   Mutex mtx;              //!< Associated mutex
-  Key key = reset_state;  //!< A key to prevent surpicious wake-up.
+  Key key = reset_state;  //!< A key to prevent suprcious wake-up.
  public:
   /**
    * @brief Construct a new simple_bell object
@@ -78,10 +76,9 @@ class simple_bell {
   /**
    * @brief Wait for sb ring the bell
    * @details This function should be called by producer after submiting the
-   * job. Once called,
-   * producer will go to sleeping state and wait for cv. To perevent surpicious
-   * wake-up, producer
-   * will go out of sleeping state if and only if key is at desired state.
+   * job. Once called, producer will go to sleeping state and wait for cv. 
+   * To perevent surpicious wake-up, producer will go out of sleeping state 
+   * if and only if key is at desired state.
    * @param desired_state the desired state that producer will wait for
    */
   void wait(Key&& desired_state) {
@@ -92,9 +89,8 @@ class simple_bell {
   }
   /**
    * @brief Get the lock that associate with the mutex
-   * @details We want to use mutext in the RAII manner to prevent resouce leak,
-   * so we should
-   * wrapper it with a lock
+   * @details We want to use mutext in the RAII manner to prevent resource leak,
+   * so we should wrapper it with a lock
    * @return Lock
    */
   Lock lock() { return Lock(mtx); }
@@ -130,7 +126,7 @@ template <const char* reset_state>
 using shared_bell = simple_bell<std::string, const char*, reset_state>;
 
 /**
- * @brief A messagge template that producer and consumer will use to communicate
+ * @brief A message template that producer and consumer will use to communicate
  * @tparam DataPtr
  * @tparam Ssize
  * @tparam ResponsePtr
@@ -208,7 +204,7 @@ class message {
 
 /**
  * @brief The communication channel between producer and consumer
- * @details Producer and Consumer will send and recieve messagge throught this
+ * @details Producer and Consumer will send and recieve message throught this
  * channel. A channel must be in with a message type.
  * @tparam Message Message type
  * @tparam DeQue Queue type, default std::deque
@@ -273,6 +269,5 @@ class blocking_queue {
   }
   using ptr = std::shared_ptr<blocking_queue>;
 };
-
-}
-}
+} // namespace sync
+} // namespace st

@@ -29,7 +29,7 @@ namespace ie {
  *
  */
 class openvino_inference_engine : public inference_engine {
- public:
+public:
   /****************************************************************/
   /*  Inference engine public interface implementation            */
   /****************************************************************/
@@ -37,11 +37,6 @@ class openvino_inference_engine : public inference_engine {
   std::vector<bbox> run_detection(const char* data, int size) final {
     auto net_out = do_infer(data, size);
     return detection_parser(net_out);
-  }
-
-  std::vector<int> run_classification(const char* data, int size) final {
-    auto net_out = do_infer(data, size);
-    return classification_parser(net_out);
   }
 
   /**
@@ -53,26 +48,17 @@ class openvino_inference_engine : public inference_engine {
   virtual std::vector<bbox> detection_parser(network_output& net_out) {
     return {};
   }
-  /**
-   * @brief Parse classification output of a inference request, network specific
-   *
-   * @param net_out
-   * @return std::vector<int>
-   */
-  virtual std::vector<int> classification_parser(network_output& net_out) {
-    return {};
-  }
 
   using ptr = std::shared_ptr<openvino_inference_engine>;
 
- private:
+private:
   /**
    * @brief OpenVino Inference Plugin
    *
    */
   InferenceEngine::InferencePlugin plugin;
 
- protected:
+protected:
   /**
    * @brief The logical CNN network
    * @details The object doesn't actually do the inferece request but hold
@@ -237,7 +223,8 @@ class openvino_inference_engine : public inference_engine {
       ovn_log->debug("Create and do inference request in {} ms",
                  elapsed_mil.count());
       return {infer_request, width, height};
-    } catch (const cv::Exception& e) {
+    } 
+    catch (const cv::Exception& e) {
       // let not opencv silly exception terminate our program
       std::cerr << "Error: " << e.what() << std::endl;
       return {nullptr, -1, -1};
@@ -258,7 +245,7 @@ class openvino_inference_engine : public inference_engine {
  * @brief SSD object detection network
  */
 class openvino_ssd : public openvino_inference_engine {
- public:
+public:
   /**
    * @brief Construct a new SSD object
    * @details This is a convinient constructor that ensembles constructing
@@ -327,7 +314,8 @@ class openvino_ssd : public openvino_inference_engine {
       elapsed_mil = end - start;
       ovn_log->debug("Parsing network output in {} ms", elapsed_mil.count());
       return ret;
-    } catch (const cv::Exception& e) {
+    }
+    catch (const cv::Exception& e) {
       std::cerr << "Error: " << e.what() << std::endl;
       return ret;
     }
@@ -335,7 +323,7 @@ class openvino_ssd : public openvino_inference_engine {
 
   using ptr = std::shared_ptr<openvino_ssd>;
 
- protected:
+protected:
   // IO_snaity_check for SSD
   void IO_sanity_check() final {
     // Input Blob
@@ -365,7 +353,7 @@ class openvino_ssd : public openvino_inference_engine {
  *
  */
 class openvino_yolo : public openvino_inference_engine {
- public:
+public:
   /**
    * @brief Construct a new YOLO v3 object
    * @details This is a convinient constructor that ensembles all constructing
@@ -439,7 +427,8 @@ class openvino_yolo : public openvino_inference_engine {
       elapsed_mil = end - start;
       ovn_log->debug("Parsing network output in {} ms", elapsed_mil.count());
       return ret;
-    } catch (const cv::Exception& e) {
+    } 
+    catch (const cv::Exception& e) {
       std::cerr << e.what() << '\n';
       return ret;
     }
@@ -447,7 +436,7 @@ class openvino_yolo : public openvino_inference_engine {
 
   using ptr = std::shared_ptr<openvino_yolo>;
 
- private:
+private:
   /**
    * @brief Yolo detection object
    *
@@ -622,7 +611,7 @@ class openvino_yolo : public openvino_inference_engine {
  *
  */
 class openvino_frcnn : public openvino_inference_engine {
- public:
+public:
   /**
    * @brief Construct a new openvino frcnn object
    *
@@ -687,7 +676,8 @@ class openvino_frcnn : public openvino_inference_engine {
       elapsed_mil = end - start;
       ovn_log->debug("Parsing network output in {} ms", elapsed_mil.count());
       return ret;
-    } catch (const cv::Exception& e) {
+    } 
+    catch (const cv::Exception& e) {
       std::cerr << "Error: " << e.what() << std::endl;
       return ret;
     }
@@ -695,7 +685,7 @@ class openvino_frcnn : public openvino_inference_engine {
 
   using ptr = std::shared_ptr<openvino_frcnn>;
 
- protected:
+protected:
   // IO sanity check for frcnn
   void IO_sanity_check() final {
     // Input Blob
@@ -708,8 +698,7 @@ class openvino_frcnn : public openvino_inference_engine {
     // Output Blob
     auto output_info = OutputsDataMap(network.getOutputsInfo());
     // Faster R-CNN has two head: cls_score and bbox_pred; however they are all
-    // unified in a
-    // detection output layer which do nms
+    // unified in a detection output layer which do nms
     if (output_info.size() != 1) {
       throw std::logic_error("Faster R-CNN must have one outputs");
     }

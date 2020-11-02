@@ -2,12 +2,10 @@
  * Copyright (C) 2020 canhld@.kaist.ac.kr
  * SPDX-License-Identifier: Apache-2.0
  * @b About: This file is a generic inference engine interface. It provide an
- *uniform
- * interface of inference engine, so the worker don't need to worry about the
- *underlying
- * implementation of deep learning algorithm in OpenVino or any DL framework.
- *The only
- * thing that workers care is a class with constructor and an invoking method.
+ * uniform interface of inference engine, so the worker don't need to worry about 
+ * the underlying implementation of deep learning algorithm in OpenVino or any 
+ * DL framework. The only thing that workers care is a class with constructor 
+ * and an invoking method.
  ***************************************************************************************/
 
 #pragma once
@@ -57,30 +55,21 @@ namespace ie {
 /**
  * @brief Generic Inference Engine Interface
  * @details Similar to tensorflow servable, but focus on object detection
- * and clasification
+ * and classification
  */
 class inference_engine {
  public:
-  /*******************************************/
-  /* Public interface of an inference engine */
-  /*******************************************/
+  /****************************************************************/
+  /*           Public interface of an inference engine            */
+  /****************************************************************/
   /**
-   * @brief Run object detection
+   * @brief Run object detection and classification
    *
    * @param data
    * @param size
    * @return std::vector<bbox>
    */
   virtual std::vector<bbox> run_detection(const char* data, int size) = 0;
-
-  /**
-   * @brief Run classification
-   *
-   * @param data
-   * @param size
-   * @return std::vector<int>
-   */
-  virtual std::vector<int> run_classification(const char* data, int size) = 0;
 
   /**
    * @brief default shared pointer
@@ -110,7 +99,6 @@ class inference_engine {
     std::copy(std::istream_iterator<std::string>(inputFile),
               std::istream_iterator<std::string>(), std::back_inserter(labels));
   }
-};
-
+}; // class inference_engine
 }  // namespace st
 }  // namespace ie

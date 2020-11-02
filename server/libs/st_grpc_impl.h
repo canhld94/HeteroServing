@@ -1,4 +1,9 @@
-
+/***************************************************************************************
+ * Copyright (C) 2020 canhld@.kaist.ac.kr
+ * SPDX-License-Identifier: Apache-2.0
+ * @b About: This file implement the service that was defined in 
+ * stubs/inference_rpc.proto
+ ***************************************************************************************/
 
 #include <iostream>
 #include <string>
@@ -24,6 +29,10 @@ using namespace st::log;
 
 namespace st {
 namespace rpc {
+/**
+ * @brief service implementation
+ * 
+ */
 class inference_rpc_impl final : public inference_rpc::Service {
   public:
     inference_rpc_impl(object_detection_mq<single_bell>::ptr& _taskq) : 
@@ -40,7 +49,7 @@ class inference_rpc_impl final : public inference_rpc::Service {
       taskq->push(m);
       rpc_log->debug("Waiting for inference engine");
       bell->wait(1);
-      rpc_log->debug("Recieved data");
+      rpc_log->debug("Received data");
       int n = prediction.size();
       for (int i = 0; i < n; ++i) {
         bbox& pred = prediction[i];
@@ -60,14 +69,17 @@ class inference_rpc_impl final : public inference_rpc::Service {
   private:
   object_detection_mq<single_bell>::ptr taskq;
   single_bell::ptr bell;
-};
+}; // class inference_rpc_impl
 
+/**
+ * @brief grpc listening worker
+ * 
+ */
 class rpc_listen_worker {
   public:
     rpc_listen_worker(object_detection_mq<single_bell>::ptr& _taskq)
         : taskq(_taskq) {}
     ~rpc_listen_worker() {}
-    // sync worker public interface implementation
     void operator()() {
       pthread_setname_np(pthread_self(), "rpc listener");
       rpc_log->warn("No IP and address is provide");
@@ -99,6 +111,6 @@ class rpc_listen_worker {
       // responsible for shutting down the server for this call to ever return.
       server->Wait();
   }
-};
-}
-}
+}; // class grpc_listen_worker
+} // namespace rpc
+} // namespace st
