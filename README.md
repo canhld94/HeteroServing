@@ -1,10 +1,14 @@
-# something
+# HeteroServing
 
-Everybody (include [Circle CI](https://twitter.com/circleci/status/951635852974854144?lang=en)) tell me I should build something, so I build something
+Serving object detection models on different hardware.
 
 ## Introduction
 
-This project build an inference server with ~~Intel FPGA~~ Intel CPU, Intel FPGA, and NVIDIA GPU backend. Currently the inference engine supports object detection object detection models (`SSD`, `YoLov3`*, and `Faster R-CNN` family); and the server support ~~REST~~ gRPC and REST. At a glance:
+> **_TL;DR_** This project (1) implement object detection models with OpenVINO and TensorRT, (2) implement servers with REST and gRPC endpoint to serve the object detection service.
+
+This project build an inference server with ~~Intel FPGA~~ Intel CPU, Intel FPGA, and NVIDIA GPU backend. Currently the inference engine supports object detection object detection models (`SSD`, `YoLov3`*, and `Faster R-CNN` family); and the server support ~~REST~~ gRPC and REST. Ones can use this project as a back-end in a complete serving framework, or use it as a standalone serving server in small applications.
+
+At a glance:
 
 *Request*
 
@@ -53,7 +57,7 @@ The server object and protocol object depends on following packages. I strongly 
 
 ```
 boost==1.73.0: socket and IPC, networking, HTTP parsing and serializing, JSON parsing and serializing
-spdlog==1.7.0: logging and debugging
+spdlog==1.7.0: logging
 glfags==2.2.2: argv parsing
 ```
 
@@ -62,9 +66,9 @@ For inference engine, I implemented CPU and FPGA inference with [Intel OpenVino]
 ```
 grpc==1.32.0
 openvino==2019R1.1
-opencv==4.1 (comes with openvino)
+opencv==4.1 (should comes with openvino)
 tensorrt==7.1.3.4
-cuda==10.2 (comes with tensorrt)
+cuda==10.2 (should comes with tensorrt)
 ```
 
 >*NOTE* As these packages are quite big with lots of dependencies, make sure you install them correctly w/o conflict and successfully compile the helloword examples.
@@ -91,7 +95,7 @@ export TRT_LIB_DIR=$TensorRT_ROOT/targets/x86_64-linux-gnu/lib/
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$TRT_LIB_DIR:$CUDA_INSTALL_DIR/lib64/
 ```
 
-The following package are required to build the project. If you don't want to use Conan, manually add cmake modules to the CMake files.
+The following tools are required to build the project. If you don't want to use Conan, manually add cmake modules to the CMake files.
 
 ```
 GCC>=5
@@ -109,16 +113,16 @@ Conan
 ├── server                  >> Server code
 │   ├── _experimental       >> Junk code, experimental ideas but not yet success  
 │   ├── config              >> Server configuration
-│   ├── libs                >> Libraries that implement components of the server
+│   ├── libs                >> Libraries that implement components of the project
 │   └── apps                >> The serving application
 ```
 
 ## How to build the project
 
-Make sure you have CMake and Conan and required framework (TensorRT, Openvino, gRPC)
+Make sure you have CMake and Conan and required framework (TensorRT, OpenVINO, gRPC)
 
 ```SH
-git clone https://github.com/canhld94/something.git
+git clone https://github.com/canhld94/HeteroServing.git
 cd something
 mkdir bin
 mkdir build && cd build
@@ -134,18 +138,20 @@ Every binary file, include conan package binaries will be installed in the `bin`
 
 1. Understand the [server architecture](docs/dev/server.md)
 
-2. Configure your [server file](server/config/README.md)
+2. Download the pre-trained models here
 
-3. Go to bin folder and run the server
+3. Configure your [server file](server/config/README.md)
+
+4. Go to bin folder and run the server
 
 ```SH
 cd bin
 ./serving -f ../server/config/config_ssd.json
+# This will start the server, and the endpoint for inference is `/inference`. 
+# Send any image to the endpoint and server will return detection result in JSON format.
 ```
 
-This will start the server, and the endpoint for inference is `/inference`. Send any image to the endpoint and server will return detection result in JSON format.
-
-3. On another terminal, go to run client folder and run client, the result will be written to file "testing.jpg"
+5. On another terminal, go to run client folder and run client, the result will be written to file `"testing.jpg"`
 
 ```SH
 # go to correct http or grpc folder
