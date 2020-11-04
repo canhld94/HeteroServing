@@ -17,13 +17,25 @@
 #include <opencv2/opencv.hpp>
 #include "st_ie_base.h"
 #include "st_logging.h"
+#include <ie_plugin_config.hpp>
+#include <ie_plugin.hpp>
+#include <hetero/hetero_plugin_config.hpp>
 
 // OpenVino Inference Engine
 using namespace InferenceEngine;
+using namespace InferenceEngine::PluginConfigParams;
+using namespace InferenceEngine::HeteroConfigParams;
 using namespace st::log;
 
 namespace st {
 namespace ie {
+
+class FPGA_ErrorListener : public IErrorListener {
+public:
+    virtual void onError(const char *msg) noexcept override {
+        std::cout << msg;
+    }
+};
 /**
  * @brief OpenVino inference engine
  *
@@ -57,6 +69,11 @@ private:
    *
    */
   InferenceEngine::InferencePlugin plugin;
+  /**
+   * @brief 
+   * 
+   */
+  FPGA_ErrorListener err_listener;
 
 protected:
   /**
@@ -92,6 +109,10 @@ protected:
     // Adding CPU extension
     if (device.find("CPU") != std::string::npos) {  // has CPU, load extension
       plugin.AddExtension(std::make_shared<Extensions::Cpu::CpuExtensions>());
+    }
+    if (device.find("FPGA") != std::string::npos) {  // has CPU, load extension
+      plugin.SetConfig({ {KEY_HETERO_DUMP_GRAPH_DOT, YES} });
+      plugin.operator InferenceEngine::HeteroPluginPtr()->SetLogCallback(err_listener); 
     }
     ovn_log->info("Pluggin inited");
     return;
@@ -214,6 +235,7 @@ protected:
           assert(input_height > 0);
           p[0] = static_cast<float>(input_width);
           p[1] = static_cast<float>(input_height);
+          p[2] = 1.0;
         }
       }
       // do inference
