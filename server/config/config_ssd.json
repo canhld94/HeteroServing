@@ -1,34 +1,34 @@
 {
   "ip": "0.0.0.0",
   "port": "8081",
-  "protocol": "grpc",
+  "protocol": "http",
   "inference engines": [
     {
       "device": "intel cpu",
       "replicas": "0",
       "model": {
           "name": "ssd",
-          "graph": "/home/canhld/workplace/InferenceServer/openvino_model/dota/ssdlite_mobilenet_v2_dota_fp32.xml",
-          "label": "/home/canhld/workplace/InferenceServer/openvino_model/dota/dota_ssd.txt"
+          "graph": "/home/canhld/workplace/InferenceServer/deploy/openvino_model/DOTA/CPU/ssd_mobilenet_v2.xml",
+          "label": "/home/canhld/workplace/InferenceServer/deploy/label/dota_v2.txt"
       }
     },
     {
       "device": "intel fpga",
-      "replicas": "0",
+      "replicas": "1",
       "model": {
         "name": "ssd",
-        "graph": "/home/canhld/workplace/InferenceServer/openvino_model/dota/ssdlite_mobilenet_v2_dota_fp16.xml",
-        "label": "/home/canhld/workplace/InferenceServer/openvino_model/dota/dota_ssd.txt"
+        "graph": "/home/canhld/workplace/InferenceServer/deploy/openvino_model/DOTA/FPGA/ssd_mobilenet_v2.xml",
+        "label": "/home/canhld/workplace/InferenceServer/deploy/label/dota_v2.txt"
       },
       "bitstream": "/opt/intel/openvino_2019.1.144/bitstreams/a10_devkit_bitstreams/2019R1_A10DK_FP16_MobileNet_Clamp.aocx"
     },
     {
       "device": "nvidia gpu",
-      "replicas": "1",
+      "replicas": "0",
       "model": {
         "name": "ssd",
-        "graph": "/home/canhld/workplace/InferenceServer/uff_model/ssdlite_mobilenet_v2.bin",
-        "label": "/home/canhld/workplace/InferenceServer/openvino_model/dota/dota_ssd.txt"
+        "graph": "/home/canhld/workplace/InferenceServer/deploy/tensorrt_model/DOTA/ssd_mobilenet_v2.bin",
+        "label": "/home/canhld/workplace/InferenceServer/deploy/label/dota_v2.txt"
       }
     }
   ]

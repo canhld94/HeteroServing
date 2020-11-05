@@ -10,16 +10,27 @@ Do **NOT** add comment to the configure file
   "inference engines": [
     {
       "device": "intel cpu",  // Device, currently support 'intel cpu, intel fpga, nvidia gpu'
-      "replicas": "1",        // Number of incerence engine you want to create on this device
-      "model": {}             // Parametter to create models, it's all depend you to include any
-                              // parametter that help you to create the engine. Note that the
-                              // input of factory method to create inference engine is a Boost
-                              // property tree object, which is this node
+      "replicas": "1",        // Number of inference engine you want to create on this device
+      "model": {
+        // Tree mandatory fields are: 'name', 'graph', and 'label'.
+        // In addition, it's all depend you to include any
+        // parameter that help you to create the engine. Note that the
+        // input of factory method to create inference engine is a Boost
+        // property tree object, which is this node
+        "name": "ssd",
+        "graph": "deploy/openvino_model/DOTA/CPU/ssd_mobilenet_v2.xml",
+        "label": "deploy/label/dota_v2.txt"
+
+      }
     },
     {
       "device": "intel fpga",
       "replicas": "1",
-      "model": {},
+      "model": {
+        "name": "ssd",
+        "graph": "",
+        "label": ""
+      },
       "bitstream": ""
     },
     {

@@ -104,6 +104,66 @@ struct network_output {
   int height;
 };
 
+static std::vector<std::pair<std::string,InferenceEngineProfileInfo>>
+perf_counters_sorted(std::map<std::string, InferenceEngineProfileInfo> perfMap) {
+    using perfItem = std::pair<std::string, InferenceEngineProfileInfo>;
+    std::vector<perfItem> sorted;
+    for (auto &kvp : perfMap) sorted.push_back(kvp);
+
+    std::stable_sort(sorted.begin(), sorted.end(),
+                     [](const perfItem& l, const perfItem& r) {
+                         return l.second.execution_index < r.second.execution_index;
+                     });
+
+    return sorted;
+}
+
+void print_perf_counts(const std::map<std::string, InferenceEngine::InferenceEngineProfileInfo>& performanceMap,
+                                          std::ostream &stream) {
+    long long totalTime = 0;
+    // Print performance counts
+    stream << std::endl << "OpenVino performance counts:" << std::endl << std::endl;
+
+    auto performanceMapSorted = perf_counters_sorted(performanceMap);
+
+    for (const auto & it : performanceMapSorted) {
+        std::string toPrint(it.first);
+        const int maxLayerName = 30;
+
+        if (it.first.length() >= maxLayerName) {
+            toPrint  = it.first.substr(0, maxLayerName - 4);
+            toPrint += "...";
+        }
+
+
+        stream << std::setw(maxLayerName) << std::left << toPrint;
+        switch (it.second.status) {
+        case InferenceEngineProfileInfo::EXECUTED:
+            stream << std::setw(15) << std::left << "EXECUTED";
+            break;
+        case InferenceEngineProfileInfo::NOT_RUN:
+            stream << std::setw(15) << std::left << "NOT_RUN";
+            break;
+        case InferenceEngineProfileInfo::OPTIMIZED_OUT:
+            stream << std::setw(15) << std::left << "OPTIMIZED_OUT";
+            break;
+        }
+        stream << std::setw(30) << std::left << "layerType: " + std::string(it.second.layer_type) + " ";
+        stream << std::setw(20) << std::left << "realTime: " + std::to_string(it.second.realTime_uSec);
+        stream << std::setw(20) << std::left << " cpu: "  + std::to_string(it.second.cpu_uSec);
+        stream << " execType: " << it.second.exec_type << std::endl;
+        if (it.second.realTime_uSec > 0) {
+            totalTime += it.second.realTime_uSec;
+        }
+    }
+    stream << std::setw(20) << std::left << "Total time: " + std::to_string(totalTime) << " microseconds" << std::endl;
+}
+
+void print_perf_counts(InferRequest request, std::ostream &stream) {
+    auto performanceMap = request.GetPerformanceCounts();
+    print_perf_counts(performanceMap, stream);
+}
+
 /**
  * @brief Simple logging that will just print to screen when error
  *

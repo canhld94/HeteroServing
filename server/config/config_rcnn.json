@@ -1,15 +1,15 @@
 {
   "ip": "0.0.0.0",
   "port": "8081",
-  "protocol": "grpc",
+  "protocol": "http",
   "inference engines": [
     {
       "device": "intel cpu",
       "replicas": "1",
       "model": {
           "name": "rcnn",
-          "graph": "/home/canhld/workplace/InferenceServer/openvino_model/dota/faster_rcnn_resnet50_fp32.xml",
-          "label": "/home/canhld/workplace/InferenceServer/openvino_model/dota/dota_ssd.txt"
+          "graph": "/home/canhld/workplace/InferenceServer/deploy/openvino_model/DOTA/CPU/faster_rcnn_resnet50.xml",
+          "label": "/home/canhld/workplace/InferenceServer/deploy/label/dota_v2.txt"
       }
     },
     {
@@ -17,18 +17,24 @@
       "replicas": "0",
       "model": {
         "name": "rcnn",
-        "graph": "/home/canhld/workplace/InferenceServer/openvino_model/dota/faster_rcnn_resnet50_fp16.xml",
-        "label": "/home/canhld/workplace/InferenceServer/openvino_model/dota/dota_ssd.txt"
+        "graph": "/home/canhld/workplace/InferenceServer/deploy/openvino_model/DOTA/FPGA/faster_rcnn_resnet50.xml",
+        "label": "/home/canhld/workplace/InferenceServer/deploy/label/dota_v2.txt",
+        "fallback": {
+          "FirstStageBoxPredictor/ClassPredictor/Conv2D" : "CPU",
+          "FirstStageBoxPredictor/BoxEncodingPredictor/Conv2D" : "CPU",
+          "proposals/conv" : "CPU",
+          "reshape_swap_proposals_2d": "CPU"
+        }
       },
-      "bitstream": "/opt/intel/openvino_2019.1.144/bitstreams/a10_devkit_bitstreams/2019R1_A10DK_FP16_MobileNet_Clamp.aocx"
+      "bitstream": "/opt/intel/openvino_2019.1.144/bitstreams/a10_devkit_bitstreams/2019R1_A10DK_FP16_ResNet_SqueezeNet_VGG.aocx"
     },
     {
       "device": "nvidia gpu",
       "replicas": "0",
       "model": {
-        "name": "rcnn",
-        "graph": "/home/canhld/workplace/InferenceServer/uff_model/ssdlite_mobilenet_v2.bin",
-        "label": "/home/canhld/workplace/InferenceServer/openvino_model/dota/dota_ssd.txt"
+        "name": "ssd",
+        "graph": "/home/canhld/workplace/InferenceServer/deploy/tensorrt_model/DOTA/ssd_mobilenet_v2.bin",
+        "label": "/home/canhld/workplace/InferenceServer/deploy/label/dota_v2.txt"
       }
     }
   ]

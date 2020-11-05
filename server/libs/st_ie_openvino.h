@@ -9,17 +9,19 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <map>
 
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/spdlog.h>
 #include <ext_list.hpp>
 #include <inference_engine.hpp>
 #include <opencv2/opencv.hpp>
-#include "st_ie_base.h"
-#include "st_logging.h"
 #include <ie_plugin_config.hpp>
 #include <ie_plugin.hpp>
 #include <hetero/hetero_plugin_config.hpp>
+#include "st_ie_base.h"
+#include "st_logging.h"
+#include "st_utils.h"
 
 // OpenVino Inference Engine
 using namespace InferenceEngine;
@@ -59,6 +61,21 @@ public:
    */
   virtual std::vector<bbox> detection_parser(network_output& net_out) {
     return {};
+  }
+
+  /**
+   * @brief custom fallback policy for layer
+   * 
+   * @param dev_map 
+   */
+  void load_fallback_policy(JSON& dev_map) {
+    for (auto &p : dev_map) {
+      std::string layer_name = p.first;
+      std::string device = p.second.data();
+      ovn_log->debug("Force layer {} to run on {}", layer_name, device);
+      network.getLayerByName(layer_name.c_str())->affinity = device;
+    }
+    load_plugin({});
   }
 
   using ptr = std::shared_ptr<openvino_inference_engine>;
@@ -110,9 +127,23 @@ protected:
     if (device.find("CPU") != std::string::npos) {  // has CPU, load extension
       plugin.AddExtension(std::make_shared<Extensions::Cpu::CpuExtensions>());
     }
-    if (device.find("FPGA") != std::string::npos) {  // has CPU, load extension
-      plugin.SetConfig({ {KEY_HETERO_DUMP_GRAPH_DOT, YES} });
-      plugin.operator InferenceEngine::HeteroPluginPtr()->SetLogCallback(err_listener); 
+    auto hetero = plugin.operator InferenceEngine::HeteroPluginPtr();
+    if (hetero) {  // has CPU, load extension
+      plugin.SetConfig({  
+        {KEY_HETERO_DUMP_GRAPH_DOT, YES}, 
+        {KEY_HETERO_DUMP_DLA_MESSAGES, YES}, 
+      });
+      hetero->SetLogCallback(err_listener); 
+      #if NDEBUG
+      plugin.SetConfig({
+        {KEY_LOG_LEVEL, LOG_INFO}
+      });
+      #else  
+      plugin.SetConfig({
+        {KEY_LOG_LEVEL, LOG_DEBUG},
+        {KEY_PERF_COUNT, YES}
+      });
+      #endif
     }
     ovn_log->info("Pluggin inited");
     return;
@@ -134,6 +165,13 @@ protected:
     netReader.ReadWeights(bin);
     network = netReader.getNetwork();
     ovn_log->info("Model loaded");
+    auto hetero = plugin.operator InferenceEngine::HeteroPluginPtr();
+    if (hetero) {
+      ovn_log->info("Hetero mode detected, loading custom fallback policy if specified");
+      ResponseDesc resp;
+      hetero->SetAffinity(network, {}, &resp);
+      ovn_log->debug("DLA message should empty if no error: Message is \"{}\"", resp.msg);
+    }
   }
   /**
    * @brief Create an executable network from the logical netowrk
@@ -244,6 +282,11 @@ protected:
       elapsed_mil = end - start;
       ovn_log->debug("Create and do inference request in {} ms",
                  elapsed_mil.count());
+      #if NDEBUG
+
+      #else
+        print_perf_counts(*infer_request, std::cout);
+      #endif
       return {infer_request, width, height};
     } 
     catch (const cv::Exception& e) {
@@ -281,7 +324,7 @@ public:
     init_plugin(device);
     load_network(model);
     init_IO(Precision::U8, Layout::NCHW);
-    load_plugin({});
+    // load_plugin({});
     set_labels(label);
   }
   // detection parser implementation for ssd
@@ -389,7 +432,7 @@ public:
     init_plugin(device);
     load_network(model);
     init_IO(Precision::U8, Layout::NCHW);
-    load_plugin({});
+    // load_plugin({});
     set_labels(label);
   }
   // detection parser implementation for yolo
@@ -646,7 +689,7 @@ public:
     init_plugin(device);
     load_network(model);
     init_IO(Precision::U8, Layout::NCHW);
-    load_plugin({});
+    // load_plugin({});
     set_labels(label);
   }
 

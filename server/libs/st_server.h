@@ -213,9 +213,8 @@ inline server::server(const std::string& json_file) {
   server_log->info("Loading server configuration from {}", json_file);
   JSON config;
   bpt::read_json(json_file, config);
-  server_log->info("Server configuration");
-  bpt::write_json(std::cout, config);
   const std::string protocol = config.get<std::string>("protocol");
+  server_log->info("Protocol: {}", protocol);
   if (protocol == "http") {
     actual = new http_server(config);
   }

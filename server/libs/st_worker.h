@@ -480,19 +480,19 @@ class sync_listen_worker : public sync_worker {
 
 private:
   object_detection_mq<single_bell>::ptr taskq;  //!< task queue
-                                                /**
-                                                 * @brief
-                                                 *
-                                                 * @param ip
-                                                 * @param p
-                                                 */
+  /**
+   * @brief
+   *
+   * @param ip
+   * @param p
+   */
   void listen(const char* ip, const char* p) {
     auto const address = net::ip::make_address(ip);
     auto const port = static_cast<unsigned short>(std::stoi(p));
     // the io_contex is required to all IO - boost asio implementation
     net::io_context ioc{1};  // we have only 1 listening thread in sync model
     // the acceptor that will recieve incomming request
-    http_log->info("Start accepting");
+    http_log->info("Start accepting on {}:{}", ip, p);
     tcp::acceptor acceptor{ioc, {address, port}};
     for (;;) {
       // this socket will run

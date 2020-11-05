@@ -45,21 +45,25 @@ model_code str2mcode(const std::string& model_name) {
 inference_engine::ptr create_openvino_engine(const std::string& plugin,
                                              const std::string& model_name,
                                              const std::string& model,
-                                             const std::string& label) {
+                                             const std::string& label,
+                                             JSON dev_map = {}) {
   auto type = str2mcode(model_name);
+  openvino_inference_engine::ptr ret;
   switch (type) {
     case model_code::SSD:
-      return std::make_shared<openvino_ssd>(plugin, model, label);
+      ret = std::make_shared<openvino_ssd>(plugin, model, label);
       break;
     case model_code::YOLOV3:
-      return std::make_shared<openvino_yolo>(plugin, model, label);
+      ret = std::make_shared<openvino_yolo>(plugin, model, label);
       break;
     case model_code::RCNN:
-      return std::make_shared<openvino_frcnn>(plugin, model, label);
+      ret = std::make_shared<openvino_frcnn>(plugin, model, label);
       break;
     default:
       return nullptr;
   }
+  ret->load_fallback_policy(dev_map);
+  return ret;
 }
 
 // create tensorrt inference engine object
@@ -67,9 +71,10 @@ inference_engine::ptr create_tensorrt_engine(const std::string& model_name,
                                              const std::string& model,
                                              const std::string& label) {
   auto type = str2mcode(model_name);
+  tensorrt_inference_engine::ptr ret;
   switch (type) {
     case model_code::SSD:
-      return std::make_shared<tensorrt_ssd>(model, label);
+      ret = std::make_shared<tensorrt_ssd>(model, label);
       break;
     // case model_code::YOLOV3 :
     //     return std::make_shared<yolo>(plugin,model,label);
@@ -80,6 +85,7 @@ inference_engine::ptr create_tensorrt_engine(const std::string& model_name,
     default:
       return nullptr;
   }
+  return ret;
 }
 
 /**
@@ -104,7 +110,7 @@ class intel_cpu_inference_engine_creator : public inference_engine_creator {
     const std::string& name = model.get<std::string>("name");
     const std::string& graph = model.get<std::string>("graph");
     const std::string& label = model.get<std::string>("label");
-    return create_openvino_engine(plugin, name, graph, label);
+    return create_openvino_engine(plugin, name, graph, label, {});
   }
 };
 /**
@@ -120,7 +126,13 @@ class intel_fpga_inference_engine_creator : public inference_engine_creator {
     const std::string& name = model.get<std::string>("name");
     const std::string& graph = model.get<std::string>("graph");
     const std::string& label = model.get<std::string>("label");
-    return create_openvino_engine(plugin, name, graph, label);
+    if (model.find("fallback") == model.not_found()) {
+      return create_openvino_engine(plugin, name, graph, label);
+    }
+    else {
+      JSON &dev_map = model.get_child("fallback");
+      return create_openvino_engine(plugin, name, graph, label, dev_map);
+    }
   }
 };
 /**

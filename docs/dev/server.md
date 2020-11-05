@@ -26,3 +26,5 @@ While I developed the queue to deal with the FPGA, I found it work well for othe
 </p>
 
 Currently, I assume all device run a same models, therefore they can get the job from a same queue. I also take some effort to make different queue for each device, so [they can run different models](/server/_experimental/st_server_reactor.cpp). However, I stopped it as it adds extra complexity to the architecture. If we want to make a complete serving platform that can serve different models on different devices, we can use this project as the back-end and write the other routines (scheduler, load-balancer) as front-end service.
+
+Currently, I create new thread to handle each client without adding any constrain on maximum number of concurrent clients. This sometime make the application run with enormous number of protocol threads. If you want to limit number of thread the system can use, you can make a thread pool and submit the connection to the pool when there is a new client.
