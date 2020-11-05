@@ -138,16 +138,17 @@ Every binary file, include conan package binaries will be installed in the `bin`
 
 1. Understand the [server architecture](docs/dev/server.md)
 
-2. Download the pre-trained models here
+2. Download the pre-trained models [here](https://drive.google.com/drive/folders/1pzu-swSQBDjAAuudIwwSI2vip1LfoXQi?usp=sharing)
 
-3. Configure your [server file](server/config/README.md)
+3. Configure your [server file](server/config/README.md) with proper model and number of inference engines on each device
 
 4. Go to bin folder and run the server
 
 ```SH
 cd bin
-./serving -f ../server/config/config_ssd.json
-# This will start the server, and the endpoint for inference is `/inference`. 
+./serving - f [link to you server config file]
+# For example: ./serving -f ../server/config/config_ssd.json
+# This will start the server; the endpoint for inference with REST is `/inference`
 # Send any image to the endpoint and server will return detection result in JSON format.
 ```
 
