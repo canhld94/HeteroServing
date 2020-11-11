@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <numeric>
+#include <algorithm>
 
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/spdlog.h>
@@ -141,7 +143,8 @@ protected:
       #else  
       plugin.SetConfig({
         {KEY_LOG_LEVEL, LOG_DEBUG},
-        {KEY_PERF_COUNT, YES}
+        {KEY_PERF_COUNT, YES}, 
+        {KEY_DUMP_KERNELS, YES}
       });
       #endif
     }
@@ -164,7 +167,8 @@ protected:
     bin += "bin";
     netReader.ReadWeights(bin);
     network = netReader.getNetwork();
-    ovn_log->info("Model loaded");
+    ovn_log->info("Set batch size to 1");
+    network.setBatchSize(1);
     auto hetero = plugin.operator InferenceEngine::HeteroPluginPtr();
     if (hetero) {
       ovn_log->info("Hetero mode detected, loading custom fallback policy if specified");
@@ -372,7 +376,7 @@ public:
           d.c[1] = ymin;
           d.c[2] = xmax;
           d.c[3] = ymax;
-          ret.push_back(d);
+          ret.push_back(std::move(d));
         }
       }
       end = std::chrono::system_clock::now();  // sync mode only
@@ -481,12 +485,12 @@ public:
         float confidence = object.confidence;
         d.prop = confidence;
         d.label_id = label_id;
-        d.label = label;
+        d.label = std::move(label);
         d.c[0] = object.xmin;
         d.c[1] = object.ymin;
         d.c[2] = object.xmax;
         d.c[3] = object.ymax;
-        ret.push_back(d);
+        ret.push_back(std::move(d));
       }
       end = std::chrono::system_clock::now();  // sync mode only
       elapsed_mil = end - start;
@@ -729,12 +733,12 @@ public:
           bbox d;
           d.prop = confidence;
           d.label_id = label_id;
-          d.label = label;
+          d.label = std::move(label);
           d.c[0] = xmin;
           d.c[1] = ymin;
           d.c[2] = xmax;
           d.c[3] = ymax;
-          ret.push_back(d);
+          ret.push_back(std::move(d));
         }
       }
       end = std::chrono::system_clock::now();  // sync mode only
@@ -778,5 +782,73 @@ protected:
     }
   }
 };  // class openvino_frcnn
+class openvino_anynet_classification : public openvino_inference_engine {
+  public:
+  /**
+   * @brief Construct a new openvino frcnn object
+   *
+   * @param device
+   * @param model
+   * @param label
+   */
+  openvino_anynet_classification(const std::string& device, 
+                                 const std::string& model,
+                                 const std::string& label) {
+    init_plugin(device);
+    load_network(model);
+    init_IO(Precision::U8, Layout::NCHW);
+    set_labels(label);
+  }
+
+  std::vector<bbox> detection_parser(network_output& net_out) final {
+    std::vector<bbox> ret = {};  // return value
+    try {
+      ovn_log->debug("Parsing classification output");
+      std::chrono::time_point<std::chrono::system_clock> start;
+      std::chrono::time_point<std::chrono::system_clock> end;
+      std::chrono::duration<double, std::milli> elapsed_mil;
+      start = std::chrono::system_clock::now();
+      auto &infer_request = net_out.infer_request;
+      auto outputInfo = OutputsDataMap(network.getOutputsInfo());
+      auto output_name = outputInfo.begin()->first;
+      auto blob = infer_request->GetBlob(output_name);
+      const float* scores =
+          blob->buffer().as<PrecisionTrait<Precision::FP32>::value_type*>();
+      auto dims = blob->dims();
+      int num_class = dims[0];
+      std::vector<int> idx(num_class);
+      ovn_log->trace("Number of classes: {}", num_class);
+      std::iota(idx.begin(), idx.end(), 0);
+      auto comp = [&](int x, int y) {
+        return scores[x] > scores[y];
+      };
+      std::sort(idx.begin(), idx.end(), comp);
+      for (int i = 0; i < 10; i++) {
+        int cls_id = idx[i];
+        float confidence = scores[cls_id];
+        ovn_log->trace("{} {} {}", i, cls_id, confidence);
+        if (cls_id <= 0) break;
+        auto label = labels[cls_id - 1];
+        ovn_log->trace("Class: {}", label);
+        if (confidence > 0.01) {
+          bbox d;
+          d.prop = confidence;
+          d.label_id = cls_id;
+          d.label = std::move(label);
+          ret.push_back(std::move(d));
+        }
+      }
+      end = std::chrono::system_clock::now();  // sync mode only
+      elapsed_mil = end - start;
+      ovn_log->debug("Parsing network output in {} ms", elapsed_mil.count());
+      return ret;
+    }
+    catch (const cv::Exception& e) {
+      std::cerr << "Error: " << e.what() << std::endl;
+      return ret;
+    }
+  }
+  private:
+}; // class openvino_anynet_classification
 }  // namespace ie
 }  // namespace st

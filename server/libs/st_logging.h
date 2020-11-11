@@ -28,7 +28,7 @@ namespace log {
     #ifdef NDEBUG
       spdlog::set_level(spdlog::level::info);
     #else
-      spdlog::set_level(spdlog::level::debug);
+      spdlog::set_level(spdlog::level::trace);
     #endif
     spdlog::set_pattern("[%H:%M:%S] [tid %t] [%n] [%l] %v");
   }

@@ -10,6 +10,7 @@
 
 #pragma once
 #include <fstream>
+#include <sstream>
 #include <iterator>
 #include <memory>
 #include <string>
@@ -96,8 +97,12 @@ class inference_engine {
    */
   void set_labels(const std::string& label) {
     std::ifstream inputFile(label);
-    std::copy(std::istream_iterator<std::string>(inputFile),
-              std::istream_iterator<std::string>(), std::back_inserter(labels));
+    std::stringstream ss;
+    ss << inputFile.rdbuf();
+    std::string tmp;
+    while (std::getline(ss, tmp, '\n')) {
+      labels.push_back(tmp);
+    }
   }
 }; // class inference_engine
 }  // namespace st

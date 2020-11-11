@@ -25,10 +25,10 @@ namespace ie {
  * @details Basic bouding box object that can use in any recognition task
  */
 struct bbox {
-  int label_id;       //!< label id
-  std::string label;  //!< class name
-  float prop;         //!< confidence score
-  int c[4];           //!< coordinates of bounding box
+  int label_id;             //!< label id
+  std::string label;        //!< class name
+  float prop;               //!< confidence score
+  int c[4] = {};            //!< coordinates of bounding box
 };
 
 /**

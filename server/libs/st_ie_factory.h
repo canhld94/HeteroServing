@@ -22,6 +22,7 @@ enum class model_code {
   SSD = 0,
   YOLOV3 = 1,
   RCNN = 2,
+  CLS = 3
 };
 
 // convert string to model code
@@ -36,6 +37,8 @@ model_code str2mcode(const std::string& model_name) {
     return model_code::YOLOV3;
   } else if (model == "rcnn") {
     return model_code::RCNN;
+  } else if (model == "classification") {
+    return model_code::CLS;
   } else {
     throw std::logic_error("Model [" + model_name + "] has not yet implemented");
   }
@@ -58,6 +61,9 @@ inference_engine::ptr create_openvino_engine(const std::string& plugin,
       break;
     case model_code::RCNN:
       ret = std::make_shared<openvino_frcnn>(plugin, model, label);
+      break;
+    case model_code::CLS:
+      ret = std::make_shared<openvino_anynet_classification>(plugin, model, label);
       break;
     default:
       return nullptr;

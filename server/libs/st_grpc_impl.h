@@ -57,12 +57,14 @@ class inference_rpc_impl final : public inference_rpc::Service {
         rpc_bbox->set_label_id(pred.label_id);
         rpc_bbox->set_label(pred.label);
         rpc_bbox->set_prob(pred.prop);
-        st::rpc::detection_output_rectangle *rec = new st::rpc::detection_output_rectangle();
-        rec->set_xmin(pred.c[0]);
-        rec->set_ymin(pred.c[1]);
-        rec->set_xmax(pred.c[2]);
-        rec->set_ymax(pred.c[3]);
-        rpc_bbox->set_allocated_box(rec);
+        if (pred.c[3]) {
+          st::rpc::detection_output_rectangle *rec = new st::rpc::detection_output_rectangle();
+          rec->set_xmin(pred.c[0]);
+          rec->set_ymin(pred.c[1]);
+          rec->set_xmax(pred.c[2]);
+          rec->set_ymax(pred.c[3]);
+          rpc_bbox->set_allocated_box(rec);
+        }
       }
       return Status::OK;
     }

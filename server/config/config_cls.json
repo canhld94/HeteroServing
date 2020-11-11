@@ -1,0 +1,35 @@
+{
+  "ip": "0.0.0.0",
+  "port": "8081",
+  "protocol": "http",
+  "inference engines": [
+    {
+      "device": "intel cpu",
+      "replicas": "1",
+      "model": {
+          "name": "classification",
+          "graph": "/home/canhld/workplace/InferenceServer/deploy/openvino_model/IMAGENET/CPU/resnet_v1-50.xml",
+          "label": "/home/canhld/workplace/InferenceServer/deploy/label/imagenet.txt"
+      }
+    },
+    {
+      "device": "intel fpga",
+      "replicas": "0",
+      "model": {
+        "name": "classification",
+        "graph": "/home/canhld/workplace/InferenceServer/deploy/openvino_model/IMAGENET/FPGA/resnet_v1-50.xml",
+        "label": "/home/canhld/workplace/InferenceServer/deploy/label/imagenet.txt"
+      },
+      "bitstream": "/opt/intel/openvino_2019.1.144/bitstreams/a10_devkit_bitstreams/2019R1_A10DK_FP16_ResNet_SqueezeNet_VGG.aocx"
+    },
+    {
+      "device": "nvidia gpu",
+      "replicas": "0",
+      "model": {
+        "name": "classification",
+        "graph": "/home/canhld/workplace/InferenceServer/deploy/tensorrt_model/IMAGENET/resnet_v1-50.bin",
+        "label": "/home/canhld/workplace/InferenceServer/deploy/label/imagenet.txt"
+      }
+    }
+  ]
+}

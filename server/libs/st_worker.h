@@ -289,15 +289,17 @@ private:
       p.put<std::string>("label", pred.label);
       p.put<float>("confidences", pred.prop);
       JSON tmp;
-      for (int i = 0; i < 4; ++i) {
-        JSON v;
-        v.put<int>("", pred.c[i]);
-        tmp.push_back({"", v});
+      if (pred.c[3]) { // ymax should never be zero
+        for (int i = 0; i < 4; ++i) {
+          JSON v;
+          v.put<int>("", pred.c[i]);
+          tmp.push_back({"", v});
+        }
+        p.put_child("detection_box", std::move(tmp));
       }
-      p.put_child("detection_box", tmp);
-      bboxes.push_back({"", p});
+      bboxes.push_back({"", std::move(p)});
     }
-    res.put_child("predictions", bboxes);
+    res.put_child("predictions", std::move(bboxes));
     std::ostringstream ss;
     bpt::write_json(ss, res);
     return ss.str();
