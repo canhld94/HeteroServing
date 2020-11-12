@@ -381,7 +381,7 @@ public:
       }
       end = std::chrono::system_clock::now();  // sync mode only
       elapsed_mil = end - start;
-      ovn_log->debug("Parsing network output in {} ms", elapsed_mil.count());
+      ovn_log->debug("Parsing ssd output in {} ms", elapsed_mil.count());
       return ret;
     }
     catch (const cv::Exception& e) {
@@ -443,6 +443,7 @@ public:
   std::vector<bbox> detection_parser(network_output& net_out) final {
     std::vector<bbox> ret;
     try {
+      ovn_log->debug("Parsing yolo output");
       std::chrono::time_point<std::chrono::system_clock> start;
       std::chrono::time_point<std::chrono::system_clock> end;
       std::chrono::duration<double, std::milli> elapsed_mil;
@@ -479,9 +480,11 @@ public:
       // Get the bboxes
       for (auto& object : objects) {
         bbox d;
-        if (object.confidence < 0.5) continue;
-        auto label_id = object.class_id + 1;
-        auto label = labels[label_id - 1];
+        ovn_log->trace("{} {} {} {} {} {}", object.class_id, object.confidence, object.xmin, object.ymin, object.xmax, object.ymax);
+        if (object.confidence < 0.4) continue;
+        auto label_id = object.class_id+1;
+        auto label = labels[label_id-1];
+        ovn_log->trace("Object: {}", label);
         float confidence = object.confidence;
         d.prop = confidence;
         d.label_id = label_id;
@@ -494,7 +497,7 @@ public:
       }
       end = std::chrono::system_clock::now();  // sync mode only
       elapsed_mil = end - start;
-      ovn_log->debug("Parsing network output in {} ms", elapsed_mil.count());
+      ovn_log->debug("Parsing yolo output in {} ms", elapsed_mil.count());
       return ret;
     } 
     catch (const cv::Exception& e) {
