@@ -26,6 +26,7 @@ def simple_client(image, ip, port):
   im = Image.open(f)
   draw = ImageDraw.Draw(im)
   for p in res.bboxes:
+    if  res.bboxes[0].box.xmax > 0:
       label_id = p.label_id
       label = p.label
       score = p.prob
@@ -34,10 +35,12 @@ def simple_client(image, ip, port):
       br = (int(bbox.xmax),int(bbox.ymax))
       draw.rectangle((tl,br),outline = "red", width = 3)
       draw.text((int(bbox.xmin),int(bbox.ymin)-10), label + " " + str(round(score,2)))
+    else: 
+      print(p)
 
-  im.save("testing.jpg","jpeg")
+    im.save("testing.jpg","jpeg")
 
 if __name__ == '__main__':
   start = timer()
-  simple_client(image=r'../imgs/AirbusDrone.jpg', ip=r'localhost', port=8081)
+  simple_client(image=r'../imgs/cats.jpg', ip=r'localhost', port=8081)
   print(timer() - start)

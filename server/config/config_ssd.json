@@ -5,7 +5,7 @@
   "inference engines": [
     {
       "device": "intel cpu",
-      "replicas": "0",
+      "replicas": "1",
       "model": {
           "name": "ssd",
           "graph": "/home/canhld/workplace/InferenceServer/deploy/openvino_model/DOTA/CPU/ssd_mobilenet_v2.xml",
@@ -20,11 +20,11 @@
         "graph": "/home/canhld/workplace/InferenceServer/deploy/openvino_model/DOTA/FPGA/ssd_mobilenet_v2.xml",
         "label": "/home/canhld/workplace/InferenceServer/deploy/label/dota_v2.txt"
       },
-      "bitstream": "/opt/intel/openvino_2019.1.144/bitstreams/a10_devkit_bitstreams/2019R1_A10DK_FP16_MobileNet_Clamp.aocx"
+      "bitstream": "/opt/intel/openvino_2019.1.144/bitstreams/a10_devkit_bitstreams/2019R1_A10DK_FP11_MobileNet_Clamp.aocx"
     },
     {
       "device": "nvidia gpu",
-      "replicas": "0",
+      "replicas": "1",
       "model": {
         "name": "ssd",
         "graph": "/home/canhld/workplace/InferenceServer/deploy/tensorrt_model/DOTA/ssd_mobilenet_v2.bin",

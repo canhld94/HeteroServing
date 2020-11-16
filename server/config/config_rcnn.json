@@ -5,7 +5,7 @@
   "inference engines": [
     {
       "device": "intel cpu",
-      "replicas": "1",
+      "replicas": "0",
       "model": {
           "name": "rcnn",
           "graph": "/home/canhld/workplace/InferenceServer/deploy/openvino_model/DOTA/CPU/faster_rcnn_resnet50.xml",
@@ -14,7 +14,7 @@
     },
     {
       "device": "intel fpga",
-      "replicas": "0",
+      "replicas": "1",
       "model": {
         "name": "rcnn",
         "graph": "/home/canhld/workplace/InferenceServer/deploy/openvino_model/DOTA/FPGA/faster_rcnn_resnet50.xml",
@@ -26,7 +26,7 @@
           "reshape_swap_proposals_2d": "CPU"
         }
       },
-      "bitstream": "/opt/intel/openvino_2019.1.144/bitstreams/a10_devkit_bitstreams/2019R1_A10DK_FP16_ResNet_SqueezeNet_VGG.aocx"
+      "bitstream": "/opt/intel/openvino_2019.1.144/bitstreams/a10_devkit_bitstreams/2019R1_A10DK_FP16_MobileNet_Clamp.aocx"
     },
     {
       "device": "nvidia gpu",

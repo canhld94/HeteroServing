@@ -25,6 +25,7 @@ def simple_client(image, ip, port):
   im = Image.open(body)
   draw = ImageDraw.Draw(im)
   for p in data["predictions"]:
+    if "detection_box" in p:
       label_id = p["label_id"]
       label = p["label"]
       score = float(p["confidences"])
@@ -33,8 +34,10 @@ def simple_client(image, ip, port):
       br = (int(bbox[2]),int(bbox[3]))
       draw.rectangle((tl,br),outline = "red", width = 3)
       draw.text((int(bbox[0]),int(bbox[1])-10), label + " " + str(round(score,2)))
+    else :
+      print(p)
 
-  im.save("testing.jpg","jpeg")
+    im.save("testing.jpg","jpeg")
 
 if __name__ == '__main__':
   simple_client(image=r'../imgs/AirbusDrone.jpg', ip=r'localhost', port=8081)

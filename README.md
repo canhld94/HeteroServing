@@ -2,11 +2,19 @@
 
 Serving object detection models on different hardware.
 
+Useful links:
+
+[Training models on DOTA dataset with Tensorflow object detection](https://github.com/canhld94/DOTA_tf_object_detection)
+
+[Pre-trained models](https://drive.google.com/drive/folders/1pzu-swSQBDjAAuudIwwSI2vip1LfoXQi?usp=sharing)
+
+[Model converter guide](https://github.com/canhld94/HeteroModelConvert)
+
 ## Introduction
 
 > **_TL;DR_** This project (1) implement object detection models with OpenVINO and TensorRT, (2) implement servers with REST and gRPC endpoint to serve the object detection service.
 
-This project build an inference server with ~~Intel FPGA~~ Intel CPU, Intel FPGA, and NVIDIA GPU backend. Currently the inference engine supports object detection object detection models (`SSD`, `YoLov3`*, and `Faster R-CNN` family); and the server support ~~REST~~ gRPC and REST. Ones can use this project as a back-end in a complete serving framework, or use it as a standalone serving server in small applications.
+This project build an inference server with ~~Intel FPGA~~ Intel CPU, Intel FPGA, and NVIDIA GPU backend. The inference engine intends to support object detection object detection models (`SSD`, `YoLov3`*, and `Faster R-CNN` family) (please find the supported models in the release notes); and the server support ~~REST~~ gRPC and REST. Ones can use this project as a back-end in a complete serving framework, or use it as a standalone serving server in small applications.
 
 At a glance:
 
@@ -71,7 +79,7 @@ tensorrt==7.1.3.4
 cuda==10.2 (should comes with tensorrt)
 ```
 
->*NOTE* As these packages are quite big with lots of dependencies, make sure you install them correctly w/o conflict and successfully compile the helloword examples.
+> **_NOTE:_** As these packages are quite big with lots of dependencies, make sure you install them correctly w/o conflict and successfully compile the helloword examples.
 
 In general, if you install these package in default location, CMake will find them eventually. Otherwise, add your install directory to `CMAKE_PREFIX_PATH`. For example, I defined following variables in my environments and let CMake retrieve them with `$ENV{}`.
 
