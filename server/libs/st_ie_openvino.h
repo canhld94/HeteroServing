@@ -200,7 +200,7 @@ protected:
   }
   /**
    * @brief Perform sanity check for a network
-   * @details This function is virutal and should be overrided for each network
+   * @details This function is virtual and should be overridden for each network
    */
   virtual void IO_sanity_check() {}
   /**

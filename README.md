@@ -2,7 +2,7 @@
 
 Serving object detection models on different hardware.
 
-Useful links:
+Related links:
 
 [Training models on DOTA dataset with Tensorflow object detection](https://github.com/canhld94/DOTA_tf_object_detection)
 
